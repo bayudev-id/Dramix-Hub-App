@@ -27,6 +27,8 @@ import com.dramix.app.ui.screens.player_tv.LiveTvPlayerScreen
 import com.dramix.app.ui.screens.player_tv.LiveTvPlayerViewModel
 import com.dramix.app.ui.screens.player_vod.VodPlayerScreen
 import com.dramix.app.ui.screens.player_vod.VodPlayerViewModel
+import com.dramix.app.ui.screens.profile.ProfileScreen
+import com.dramix.app.ui.screens.profile.ProfileViewModel
 import com.dramix.app.ui.theme.PureBlack
 import org.koin.androidx.compose.koinViewModel
 import org.koin.core.parameter.parametersOf
@@ -122,9 +124,13 @@ fun AppNavigation(
             }
 
             composable(Screen.Profile.route) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text(text = "Profil & Aktivasi Lisensi", color = Color.White)
-                }
+                val profileViewModel: ProfileViewModel = koinViewModel()
+                ProfileScreen(
+                    viewModel = profileViewModel,
+                    onNavigateToVodPlayer = { providerId, dramaId ->
+                        navController.navigate(Screen.VodPlayer.createRoute(providerId, dramaId))
+                    }
+                )
             }
 
             composable(

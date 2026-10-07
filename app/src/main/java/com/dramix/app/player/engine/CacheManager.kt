@@ -39,4 +39,20 @@ object CacheManager {
         simpleCache?.release()
         simpleCache = null
     }
+
+    fun getCacheSizeBytes(context: Context): Long {
+        val cacheDir = File(context.cacheDir, CACHE_DIR_NAME)
+        if (!cacheDir.exists()) return 0L
+        return cacheDir.walkTopDown().filter { it.isFile }.sumOf { it.length() }
+    }
+
+    @Synchronized
+    fun clearCache(context: Context) {
+        releaseCache()
+        val cacheDir = File(context.cacheDir, CACHE_DIR_NAME)
+        if (cacheDir.exists()) {
+            cacheDir.deleteRecursively()
+            cacheDir.mkdirs()
+        }
+    }
 }
