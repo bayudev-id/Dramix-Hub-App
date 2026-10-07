@@ -1,0 +1,137 @@
+package com.dramix.app.ui.navigation
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.navigation.NavHostController
+import androidx.navigation.NavType
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
+import com.dramix.app.ui.components.BottomNavigationBar
+import com.dramix.app.ui.screens.home.HomeScreen
+import com.dramix.app.ui.screens.home.HomeViewModel
+import com.dramix.app.ui.theme.PureBlack
+import org.koin.androidx.compose.koinViewModel
+
+@Composable
+fun AppNavigation(
+    navController: NavHostController = rememberNavController()
+) {
+    val navBackStackEntry by navController.currentBackStackEntryAsState()
+    val currentRoute = navBackStackEntry?.destination?.route
+
+    val mainTabs = listOf(
+        Screen.Home.route,
+        Screen.Shorts.route,
+        Screen.LiveTv.route,
+        Screen.Profile.route
+    )
+    val shouldShowBottomBar = currentRoute in mainTabs
+
+    Scaffold(
+        bottomBar = {
+            if (shouldShowBottomBar) {
+                BottomNavigationBar(
+                    currentRoute = currentRoute,
+                    onNavigateToRoute = { route ->
+                        navController.navigate(route) {
+                            popUpTo(Screen.Home.route) {
+                                saveState = true
+                            }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    }
+                )
+            }
+        }
+    ) { innerPadding ->
+        NavHost(
+            navController = navController,
+            startDestination = Screen.Home.route,
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .background(PureBlack)
+        ) {
+            composable(Screen.Home.route) {
+                val homeViewModel: HomeViewModel = koinViewModel()
+                HomeScreen(
+                    viewModel = homeViewModel,
+                    onNavigateToVodPlayer = { providerId, dramaId ->
+                        navController.navigate(Screen.VodPlayer.createRoute(providerId, dramaId))
+                    },
+                    onNavigateToShorts = { _, _ ->
+                        navController.navigate(Screen.Shorts.route)
+                    },
+                    onNavigateToSearch = {
+                        navController.navigate(Screen.Search.route)
+                    }
+                )
+            }
+
+            composable(Screen.Shorts.route) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text(text = "Drama Pendek 9:16", color = Color.White)
+                }
+            }
+
+            composable(Screen.LiveTv.route) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text(text = "Live TV Channel Feed", color = Color.White)
+                }
+            }
+
+            composable(Screen.Profile.route) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text(text = "Profil & Aktivasi Lisensi", color = Color.White)
+                }
+            }
+
+            composable(
+                route = Screen.VodPlayer.route,
+                arguments = listOf(
+                    navArgument("providerId") { type = NavType.StringType },
+                    navArgument("dramaId") { type = NavType.StringType }
+                )
+            ) { backStackEntry ->
+                val providerId = backStackEntry.arguments?.getString("providerId") ?: ""
+                val dramaId = backStackEntry.arguments?.getString("dramaId") ?: ""
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text(text = "VOD Player: $providerId / $dramaId", color = Color.White)
+                }
+            }
+
+            composable(
+                route = Screen.LiveTvPlayer.route,
+                arguments = listOf(
+                    navArgument("providerId") { type = NavType.StringType },
+                    navArgument("channelId") { type = NavType.StringType }
+                )
+            ) { backStackEntry ->
+                val providerId = backStackEntry.arguments?.getString("providerId") ?: ""
+                val channelId = backStackEntry.arguments?.getString("channelId") ?: ""
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text(text = "Live TV Player: $providerId / $channelId", color = Color.White)
+                }
+            }
+
+            composable(Screen.Search.route) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text(text = "Pencarian Multi-Provider", color = Color.White)
+                }
+            }
+        }
+    }
+}
