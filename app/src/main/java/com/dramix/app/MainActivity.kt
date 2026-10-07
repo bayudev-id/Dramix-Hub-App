@@ -7,23 +7,30 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import com.dramix.app.ui.theme.DramixTheme
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(text = "Dramix", color = Color(0xFFE11D48))
+            DramixTheme {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.background),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "Dramix",
+                        style = MaterialTheme.typography.displayLarge,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
             }
         }
     }
