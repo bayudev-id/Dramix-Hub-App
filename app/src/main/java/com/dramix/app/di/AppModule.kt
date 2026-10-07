@@ -15,6 +15,7 @@ import com.dramix.app.domain.repository.LicenseRepository
 import com.dramix.app.player.engine.PlayerFactory
 import com.dramix.app.ui.screens.home.HomeViewModel
 import com.dramix.app.ui.screens.player_shorts.ShortsPlayerViewModel
+import com.dramix.app.ui.screens.player_tv.LiveTvPlayerViewModel
 import com.dramix.app.ui.screens.player_vod.VodPlayerViewModel
 import org.koin.android.ext.koin.androidContext
 import org.koin.androidx.viewmodel.dsl.viewModel
@@ -84,6 +85,14 @@ val viewModelModule = module {
             watchHistoryDao = get(),
             bookmarkDao = get(),
             entitlementManager = get(),
+            playerFactory = get()
+        )
+    }
+    viewModel { (providerId: String?, channelId: String?) ->
+        LiveTvPlayerViewModel(
+            initialProviderId = providerId,
+            initialChannelId = channelId,
+            catalogRepository = get(),
             playerFactory = get()
         )
     }

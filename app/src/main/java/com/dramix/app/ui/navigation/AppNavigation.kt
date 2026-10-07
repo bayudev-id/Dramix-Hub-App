@@ -23,6 +23,8 @@ import com.dramix.app.ui.screens.home.HomeScreen
 import com.dramix.app.ui.screens.home.HomeViewModel
 import com.dramix.app.ui.screens.player_shorts.ShortsPlayerScreen
 import com.dramix.app.ui.screens.player_shorts.ShortsPlayerViewModel
+import com.dramix.app.ui.screens.player_tv.LiveTvPlayerScreen
+import com.dramix.app.ui.screens.player_tv.LiveTvPlayerViewModel
 import com.dramix.app.ui.screens.player_vod.VodPlayerScreen
 import com.dramix.app.ui.screens.player_vod.VodPlayerViewModel
 import com.dramix.app.ui.theme.PureBlack
@@ -112,9 +114,11 @@ fun AppNavigation(
             }
 
             composable(Screen.LiveTv.route) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text(text = "Live TV Channel Feed", color = Color.White)
-                }
+                val tvViewModel: LiveTvPlayerViewModel = koinViewModel { parametersOf(null, null) }
+                LiveTvPlayerScreen(
+                    viewModel = tvViewModel,
+                    onNavigateBack = { navController.popBackStack() }
+                )
             }
 
             composable(Screen.Profile.route) {
@@ -149,9 +153,11 @@ fun AppNavigation(
             ) { backStackEntry ->
                 val providerId = backStackEntry.arguments?.getString("providerId") ?: ""
                 val channelId = backStackEntry.arguments?.getString("channelId") ?: ""
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text(text = "Live TV Player: $providerId / $channelId", color = Color.White)
-                }
+                val tvViewModel: LiveTvPlayerViewModel = koinViewModel { parametersOf(providerId, channelId) }
+                LiveTvPlayerScreen(
+                    viewModel = tvViewModel,
+                    onNavigateBack = { navController.popBackStack() }
+                )
             }
 
             composable(Screen.Search.route) {
