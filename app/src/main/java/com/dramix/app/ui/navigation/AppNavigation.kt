@@ -21,8 +21,11 @@ import androidx.navigation.navArgument
 import com.dramix.app.ui.components.BottomNavigationBar
 import com.dramix.app.ui.screens.home.HomeScreen
 import com.dramix.app.ui.screens.home.HomeViewModel
+import com.dramix.app.ui.screens.player_vod.VodPlayerScreen
+import com.dramix.app.ui.screens.player_vod.VodPlayerViewModel
 import com.dramix.app.ui.theme.PureBlack
 import org.koin.androidx.compose.koinViewModel
+import org.koin.core.parameter.parametersOf
 
 @Composable
 fun AppNavigation(
@@ -108,9 +111,12 @@ fun AppNavigation(
             ) { backStackEntry ->
                 val providerId = backStackEntry.arguments?.getString("providerId") ?: ""
                 val dramaId = backStackEntry.arguments?.getString("dramaId") ?: ""
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text(text = "VOD Player: $providerId / $dramaId", color = Color.White)
-                }
+                val vodViewModel: VodPlayerViewModel = koinViewModel { parametersOf(providerId, dramaId) }
+                VodPlayerScreen(
+                    viewModel = vodViewModel,
+                    onNavigateBack = { navController.popBackStack() },
+                    onNavigateToProfile = { navController.navigate(Screen.Profile.route) }
+                )
             }
 
             composable(
