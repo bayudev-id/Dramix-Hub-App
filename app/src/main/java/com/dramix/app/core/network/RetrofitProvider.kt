@@ -30,4 +30,18 @@ object RetrofitProvider {
 
         return retrofit.create(GatewayApiService::class.java)
     }
+
+    fun createLicenseService(
+        okHttpClient: OkHttpClient,
+        baseUrl: String = DEFAULT_GATEWAY_URL,
+        moshi: Moshi = createMoshi()
+    ): com.dramix.app.data.source.remote.LicenseApiService {
+        val retrofit = Retrofit.Builder()
+            .baseUrl(baseUrl)
+            .client(okHttpClient)
+            .addConverterFactory(MoshiConverterFactory.create(moshi))
+            .build()
+
+        return retrofit.create(com.dramix.app.data.source.remote.LicenseApiService::class.java)
+    }
 }
