@@ -215,7 +215,13 @@ fun ProfileScreen(
         if (uiState.showDownloadsSheet) {
             DownloadsBottomSheet(
                 downloads = uiState.downloads,
-                onDismissRequest = { viewModel.closeDownloads() }
+                onDismissRequest = { viewModel.closeDownloads() },
+                onPauseDownload = { viewModel.pauseDownload(it) },
+                onResumeDownload = { viewModel.resumeDownload(it) },
+                onDeleteDownload = { viewModel.deleteDownload(it) },
+                onPlayDownload = { record ->
+                    onNavigateToVodPlayer(record.providerId, record.dramaId)
+                }
             )
         }
 

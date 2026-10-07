@@ -27,6 +27,7 @@ import com.dramix.app.ui.screens.player_tv.LiveTvPlayerScreen
 import com.dramix.app.ui.screens.player_tv.LiveTvPlayerViewModel
 import com.dramix.app.ui.screens.player_vod.VodPlayerScreen
 import com.dramix.app.ui.screens.player_vod.VodPlayerViewModel
+import com.dramix.app.ui.screens.profile.DownloadManagerScreen
 import com.dramix.app.ui.screens.profile.ProfileScreen
 import com.dramix.app.ui.screens.profile.ProfileViewModel
 import com.dramix.app.ui.screens.search.SearchScreen
@@ -181,6 +182,17 @@ fun AppNavigation(
                     },
                     onNavigateToLiveTvPlayer = { providerId, channelId ->
                         navController.navigate(Screen.LiveTvPlayer.createRoute(providerId, channelId))
+                    }
+                )
+            }
+
+            composable(Screen.DownloadManager.route) {
+                val profileViewModel: ProfileViewModel = koinViewModel()
+                DownloadManagerScreen(
+                    viewModel = profileViewModel,
+                    onNavigateBack = { navController.popBackStack() },
+                    onPlayDownload = { record ->
+                        navController.navigate(Screen.VodPlayer.createRoute(record.providerId, record.dramaId))
                     }
                 )
             }

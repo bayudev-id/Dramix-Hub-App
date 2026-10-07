@@ -25,6 +25,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.DownloadDone
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -239,21 +240,21 @@ fun VodPlayerScreen(
                                         .background(MidnightCard)
                                         .border(1.dp, MidnightBorder, RoundedCornerShape(8.dp))
                                         .clickable {
-                                            // Handled by offline download manager in Task 11
+                                            viewModel.downloadCurrentEpisode()
                                         },
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.Center
                                 ) {
                                     Icon(
-                                        imageVector = Icons.Default.Download,
+                                        imageVector = if (uiState.isCurrentEpisodeDownloaded) Icons.Default.DownloadDone else Icons.Default.Download,
                                         contentDescription = "Unduh",
-                                        tint = Slate50,
+                                        tint = if (uiState.isCurrentEpisodeDownloaded) Color(0xFF10B981) else Slate50,
                                         modifier = Modifier.size(20.dp)
                                     )
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Text(
-                                        text = "Unduh",
-                                        color = Slate50,
+                                        text = if (uiState.isCurrentEpisodeDownloaded) "Tersimpan" else "Unduh",
+                                        color = if (uiState.isCurrentEpisodeDownloaded) Color(0xFF10B981) else Slate50,
                                         fontWeight = FontWeight.Medium,
                                         fontSize = 14.sp
                                     )

@@ -355,7 +355,11 @@ fun BookmarksBottomSheet(
 @Composable
 fun DownloadsBottomSheet(
     downloads: List<DownloadRecordEntity>,
-    onDismissRequest: () -> Unit
+    onDismissRequest: () -> Unit,
+    onPauseDownload: (DownloadRecordEntity) -> Unit = {},
+    onResumeDownload: (DownloadRecordEntity) -> Unit = {},
+    onDeleteDownload: (DownloadRecordEntity) -> Unit = {},
+    onPlayDownload: (DownloadRecordEntity) -> Unit = {}
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
@@ -421,43 +425,16 @@ fun DownloadsBottomSheet(
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     items(downloads, key = { it.id }) { item ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(MidnightCard)
-                                .border(1.dp, MidnightBorder, RoundedCornerShape(8.dp))
-                                .padding(12.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                val title = item.episodeTitle ?: "${item.dramaTitle} - Ep ${item.episodeNumber}"
-                                Text(
-                                    text = title,
-                                    color = Slate50,
-                                    fontWeight = FontWeight.SemiBold,
-                                    fontSize = 14.sp,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-
-                                Spacer(modifier = Modifier.height(4.dp))
-
-                                Text(
-                                    text = "Status: ${item.status.uppercase()} (${item.progressPercentage}%)",
-                                    color = if (item.status == "completed") Color(0xFF10B981) else Slate400,
-                                    fontSize = 12.sp
-                                )
+                        DownloadItemCard(
+                            item = item,
+                            onPause = { onPauseDownload(item) },
+                            onResume = { onResumeDownload(item) },
+                            onDelete = { onDeleteDownload(item) },
+                            onPlay = {
+                                onPlayDownload(item)
+                                onDismissRequest()
                             }
-
-                            if (item.status == "completed") {
-                                Icon(
-                                    imageVector = Icons.Default.DownloadDone,
-                                    contentDescription = "Selesai",
-                                    tint = Color(0xFF10B981)
-                                )
-                            }
-                        }
+                        )
                     }
                 }
             }

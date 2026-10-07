@@ -150,6 +150,7 @@ class ProfileViewModelTest {
         override fun getDownloadsByStatus(status: String): Flow<List<DownloadRecordEntity>> = list
         override suspend fun updateDownloadProgress(mediaId: String, bytesDownloaded: Long, totalBytes: Long, progressPercentage: Int, status: String): Int = 1
         override suspend fun updateDownloadStatus(mediaId: String, status: String, completedAt: Long?, errorMessage: String?): Int = 1
+        override suspend fun updateDownloadCompleted(mediaId: String, localUri: String, status: String, completedAt: Long): Int = 1
         override suspend fun deleteDownload(mediaId: String): Int = 1
     }
 

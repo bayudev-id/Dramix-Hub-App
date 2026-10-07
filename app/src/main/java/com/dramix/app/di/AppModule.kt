@@ -13,6 +13,8 @@ import com.dramix.app.data.source.local.SearchPreferences
 import com.dramix.app.domain.manager.EntitlementManager
 import com.dramix.app.domain.repository.CatalogRepository
 import com.dramix.app.domain.repository.LicenseRepository
+import com.dramix.app.player.download.DownloadManagerHelper
+import com.dramix.app.player.download.DownloadTracker
 import com.dramix.app.player.engine.PlayerFactory
 import com.dramix.app.ui.screens.home.HomeViewModel
 import com.dramix.app.ui.screens.player_shorts.ShortsPlayerViewModel
@@ -62,6 +64,17 @@ val repositoryModule = module {
     single { PlayerFactory(context = androidContext(), okHttpClient = get()) }
 }
 
+val downloadModule = module {
+    single { DownloadManagerHelper.getDownloadManager(context = androidContext(), okHttpClient = get()) }
+    single {
+        DownloadTracker(
+            context = androidContext(),
+            downloadManager = get(),
+            downloadRecordDao = get()
+        )
+    }
+}
+
 val viewModelModule = module {
     viewModel {
         HomeViewModel(
@@ -78,7 +91,9 @@ val viewModelModule = module {
             bookmarkDao = get(),
             entitlementManager = get(),
             licenseRepository = get(),
-            playerFactory = get()
+            playerFactory = get(),
+            downloadRecordDao = get(),
+            downloadTracker = get()
         )
     }
     viewModel { (providerId: String?, dramaId: String?) ->
@@ -108,7 +123,8 @@ val viewModelModule = module {
             watchHistoryDao = get(),
             bookmarkDao = get(),
             downloadRecordDao = get(),
-            context = androidContext()
+            context = androidContext(),
+            downloadTracker = get()
         )
     }
     viewModel {
@@ -123,5 +139,6 @@ val appModules = listOf(
     databaseModule,
     coreModule,
     repositoryModule,
+    downloadModule,
     viewModelModule
 )

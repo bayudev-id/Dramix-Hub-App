@@ -14,6 +14,7 @@ sealed class Screen(val route: String) {
     data object LiveTv : Screen("live_tv")
     data object Profile : Screen("profile")
     data object Search : Screen("search")
+    data object DownloadManager : Screen("download_manager")
 
     data object VodPlayer : Screen("vod_player/{providerId}/{dramaId}") {
         fun createRoute(providerId: String, dramaId: String): String {

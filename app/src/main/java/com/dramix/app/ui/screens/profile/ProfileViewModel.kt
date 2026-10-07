@@ -12,6 +12,7 @@ import com.dramix.app.core.database.entity.WatchHistoryEntity
 import com.dramix.app.core.security.DeviceIdentifier
 import com.dramix.app.data.source.local.LicensePreferences
 import com.dramix.app.domain.repository.LicenseRepository
+import com.dramix.app.player.download.DownloadTracker
 import com.dramix.app.player.engine.CacheManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -48,7 +49,8 @@ class ProfileViewModel(
     private val watchHistoryDao: WatchHistoryDao,
     private val bookmarkDao: BookmarkDao,
     private val downloadRecordDao: DownloadRecordDao,
-    private val context: Context
+    private val context: Context,
+    private val downloadTracker: DownloadTracker? = null
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ProfileUiState())
@@ -226,5 +228,35 @@ class ProfileViewModel(
 
     fun dismissSuccessMessage() {
         _uiState.value = _uiState.value.copy(activationSuccessMessage = null)
+    }
+
+    fun pauseDownload(record: DownloadRecordEntity) {
+        if (downloadTracker != null) {
+            downloadTracker.pauseDownload(record.mediaId)
+        } else {
+            viewModelScope.launch {
+                downloadRecordDao.updateDownloadStatus(record.mediaId, "PAUSED")
+            }
+        }
+    }
+
+    fun resumeDownload(record: DownloadRecordEntity) {
+        if (downloadTracker != null) {
+            downloadTracker.resumeDownload(record.mediaId)
+        } else {
+            viewModelScope.launch {
+                downloadRecordDao.updateDownloadStatus(record.mediaId, "DOWNLOADING")
+            }
+        }
+    }
+
+    fun deleteDownload(record: DownloadRecordEntity) {
+        if (downloadTracker != null) {
+            downloadTracker.removeDownload(record.mediaId)
+        } else {
+            viewModelScope.launch {
+                downloadRecordDao.deleteDownload(record.mediaId)
+            }
+        }
     }
 }

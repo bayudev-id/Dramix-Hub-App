@@ -3,6 +3,7 @@ package com.dramix.app.ui.screens.player_vod
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.dramix.app.core.database.dao.BookmarkDao
+import com.dramix.app.core.database.dao.DownloadRecordDao
 import com.dramix.app.core.database.dao.WatchHistoryDao
 import com.dramix.app.core.database.entity.BookmarkEntity
 import com.dramix.app.core.database.entity.WatchHistoryEntity
@@ -11,15 +12,18 @@ import com.dramix.app.domain.manager.PlaybackAccess
 import com.dramix.app.domain.model.DramaDetail
 import com.dramix.app.domain.model.Episode
 import com.dramix.app.domain.model.PlaybackSource
+import com.dramix.app.domain.model.Season
 import com.dramix.app.domain.repository.CatalogRepository
 import com.dramix.app.domain.repository.LicenseRepository
 import com.dramix.app.player.controller.DramixPlayerController
+import com.dramix.app.player.download.DownloadTracker
 import com.dramix.app.player.engine.PlayerFactory
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
@@ -31,6 +35,7 @@ data class VodPlayerUiState(
     val currentEpisode: Episode? = null,
     val playbackSource: PlaybackSource? = null,
     val isBookmarked: Boolean = false,
+    val isCurrentEpisodeDownloaded: Boolean = false,
     val showLicenseGate: Boolean = false,
     val lockedEpisodeNumber: Int = 1,
     val errorMessage: String? = null
@@ -45,7 +50,9 @@ class VodPlayerViewModel(
     private val entitlementManager: EntitlementManager,
     private val licenseRepository: LicenseRepository,
     playerFactory: PlayerFactory,
-    enablePlayerCache: Boolean = true
+    enablePlayerCache: Boolean = true,
+    private val downloadRecordDao: DownloadRecordDao? = null,
+    private val downloadTracker: DownloadTracker? = null
 ) : ViewModel() {
 
     private val playerPair = playerFactory.createPlayer(enableCache = enablePlayerCache)
@@ -80,6 +87,42 @@ class VodPlayerViewModel(
 
             val detailResult = catalogRepository.getDramaDetail(providerId, dramaId)
             if (detailResult.isFailure) {
+                // Airplane Mode / Network Failure: Check if offline downloads exist for this drama
+                val offlineRecords = try {
+                    downloadRecordDao?.getDownloadsByStatus("COMPLETED")?.firstOrNull()
+                        ?.filter { it.dramaId == dramaId && it.providerId == providerId }
+                        ?: emptyList()
+                } catch (_: Exception) {
+                    emptyList()
+                }
+
+                if (offlineRecords.isNotEmpty()) {
+                    val offlineEpisodes = offlineRecords.map { rec ->
+                        Episode(
+                            id = rec.mediaId,
+                            number = rec.episodeNumber,
+                            title = rec.episodeTitle,
+                            isVip = false
+                        )
+                    }.sortedBy { it.number }
+
+                    val offlineDetail = DramaDetail(
+                        id = dramaId,
+                        title = offlineRecords.first().dramaTitle,
+                        description = "Tersedia offline di perangkat Anda",
+                        cover = "",
+                        totalEpisodes = offlineEpisodes.size,
+                        seasons = listOf(Season(index = 1, totalEpisodes = offlineEpisodes.size, episodes = offlineEpisodes))
+                    )
+
+                    _uiState.value = _uiState.value.copy(
+                        isLoadingDetail = false,
+                        detail = offlineDetail
+                    )
+                    playEpisode(offlineEpisodes.first())
+                    return@launch
+                }
+
                 _uiState.value = _uiState.value.copy(
                     isLoadingDetail = false,
                     errorMessage = detailResult.exceptionOrNull()?.localizedMessage ?: "Gagal memuat detail drama"
@@ -137,6 +180,35 @@ class VodPlayerViewModel(
             // Save last position of old episode if switching
             saveCurrentProgress()
 
+            // Check if episode is already downloaded locally
+            val localRecord = try {
+                downloadRecordDao?.getDownloadByMediaIdSync(episode.id)
+            } catch (_: Exception) {
+                null
+            }
+
+            if (localRecord != null && localRecord.status == "COMPLETED" && !localRecord.localUri.isNullOrBlank()) {
+                val resumePosition = try {
+                    val epHistory = watchHistoryDao.getEpisodeHistory(dramaId, providerId, episode.number)
+                    epHistory?.positionMs ?: 0L
+                } catch (_: Exception) {
+                    0L
+                }
+
+                playerController.prepare(
+                    streamUrl = localRecord.localUri,
+                    headers = emptyMap(),
+                    startPositionMs = resumePosition,
+                    autoPlay = true
+                )
+
+                _uiState.value = _uiState.value.copy(
+                    isLoadingPlayback = false,
+                    isCurrentEpisodeDownloaded = true
+                )
+                return@launch
+            }
+
             val sourceResult = catalogRepository.getPlaybackSource(
                 modelId = providerId,
                 episodeId = episode.id,
@@ -185,9 +257,33 @@ class VodPlayerViewModel(
 
             _uiState.value = _uiState.value.copy(
                 playbackSource = source,
-                isLoadingPlayback = false
+                isLoadingPlayback = false,
+                isCurrentEpisodeDownloaded = localRecord?.status == "COMPLETED"
             )
         }
+    }
+
+    fun downloadCurrentEpisode() {
+        val ep = _uiState.value.currentEpisode ?: return
+        val detail = _uiState.value.detail ?: return
+        val source = _uiState.value.playbackSource ?: return
+        val stream = source.streams.firstOrNull() ?: return
+
+        val headers = HashMap<String, String>().apply {
+            putAll(source.headers)
+            putAll(stream.headers)
+        }
+
+        downloadTracker?.startDownload(
+            dramaId = dramaId,
+            providerId = providerId,
+            dramaTitle = detail.title,
+            episodeNumber = ep.number,
+            episodeTitle = ep.title,
+            streamUrl = stream.url,
+            mediaId = ep.id,
+            headers = headers
+        )
     }
 
     fun toggleBookmark() {

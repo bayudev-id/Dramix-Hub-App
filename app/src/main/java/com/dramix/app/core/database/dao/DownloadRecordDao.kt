@@ -54,6 +54,22 @@ interface DownloadRecordDao {
         errorMessage: String? = null
     ): Int
 
+    @Query("""
+        UPDATE download_record 
+        SET status = :status, 
+            local_uri = :localUri,
+            progress_percentage = 100,
+            completed_at = :completedAt, 
+            error_message = NULL 
+        WHERE media_id = :mediaId
+    """)
+    suspend fun updateDownloadCompleted(
+        mediaId: String,
+        localUri: String,
+        status: String = "COMPLETED",
+        completedAt: Long = System.currentTimeMillis()
+    ): Int
+
     @Query("DELETE FROM download_record WHERE media_id = :mediaId")
     suspend fun deleteDownload(mediaId: String): Int
 }

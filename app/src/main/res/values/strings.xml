@@ -1,3 +1,5 @@
 <resources>
     <string name="app_name">Dramix</string>
+    <string name="download_channel_name">Unduhan Dramix</string>
+    <string name="download_channel_description">Menampilkan progres unduhan episode video</string>
 </resources>

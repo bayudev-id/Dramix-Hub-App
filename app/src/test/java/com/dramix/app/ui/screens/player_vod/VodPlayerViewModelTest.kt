@@ -3,8 +3,10 @@ package com.dramix.app.ui.screens.player_vod
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import com.dramix.app.core.database.dao.BookmarkDao
+import com.dramix.app.core.database.dao.DownloadRecordDao
 import com.dramix.app.core.database.dao.WatchHistoryDao
 import com.dramix.app.core.database.entity.BookmarkEntity
+import com.dramix.app.core.database.entity.DownloadRecordEntity
 import com.dramix.app.core.database.entity.WatchHistoryEntity
 import com.dramix.app.domain.manager.EntitlementManager
 import com.dramix.app.domain.model.Category
@@ -136,6 +138,54 @@ class VodPlayerViewModelTest {
         override suspend fun getBookmark(dramaId: String, providerId: String): BookmarkEntity? = null
     }
 
+    private class FakeDownloadRecordDao : DownloadRecordDao {
+        val records = mutableMapOf<String, DownloadRecordEntity>()
+
+        override suspend fun insertOrUpdateDownload(record: DownloadRecordEntity): Long {
+            records[record.mediaId] = record
+            return 1L
+        }
+
+        override suspend fun getDownloadByMediaIdSync(mediaId: String): DownloadRecordEntity? {
+            return records[mediaId]
+        }
+
+        override fun getDownloadByMediaId(mediaId: String): Flow<DownloadRecordEntity?> =
+            flowOf(records[mediaId])
+
+        override fun getAllDownloads(): Flow<List<DownloadRecordEntity>> =
+            flowOf(records.values.toList())
+
+        override fun getDownloadsByStatus(status: String): Flow<List<DownloadRecordEntity>> =
+            flowOf(records.values.filter { it.status.equals(status, ignoreCase = true) })
+
+        override suspend fun updateDownloadProgress(
+            mediaId: String,
+            bytesDownloaded: Long,
+            totalBytes: Long,
+            progressPercentage: Int,
+            status: String
+        ): Int = 1
+
+        override suspend fun updateDownloadStatus(
+            mediaId: String,
+            status: String,
+            completedAt: Long?,
+            errorMessage: String?
+        ): Int = 1
+
+        override suspend fun updateDownloadCompleted(
+            mediaId: String,
+            localUri: String,
+            status: String,
+            completedAt: Long
+        ): Int = 1
+
+        override suspend fun deleteDownload(mediaId: String): Int {
+            return if (records.remove(mediaId) != null) 1 else 0
+        }
+    }
+
     private class FakeLicenseRepository(var vipActive: Boolean = false) : LicenseRepository {
         override suspend fun activateLicense(licenseKey: String): Result<LicenseStatus> = Result.success(LicenseStatus(isVip = true))
         override suspend fun refreshLicenseStatus(): Result<LicenseStatus> = Result.success(LicenseStatus(isVip = vipActive))
@@ -259,6 +309,112 @@ class VodPlayerViewModelTest {
         testDispatcher.scheduler.advanceTimeBy(1000)
         testDispatcher.scheduler.runCurrent()
         assertFalse(viewModel.uiState.value.isBookmarked)
+
+        viewModel.release()
+    }
+
+    @Test
+    fun vodPlayer_plays_offline_downloaded_episode_without_network_request() = runTest {
+        val watchHistoryDao = FakeWatchHistoryDao()
+        val bookmarkDao = FakeBookmarkDao()
+        val downloadRecordDao = FakeDownloadRecordDao()
+        val licenseRepository = FakeLicenseRepository(vipActive = true)
+        val entitlementManager = EntitlementManager(licenseRepository)
+
+        // Seed a completed offline download for Episode 1
+        val offlineUri = "file:///data/user/0/com.dramix.app/files/dramix_downloads/ep-1.mp4"
+        downloadRecordDao.insertOrUpdateDownload(
+            DownloadRecordEntity(
+                mediaId = "ep-1",
+                dramaId = "drama-101",
+                providerId = "wetv",
+                dramaTitle = "Love Between Fairy and Devil",
+                episodeNumber = 1,
+                streamUrl = "https://cdn.example.com/stream.m3u8",
+                localUri = offlineUri,
+                status = "COMPLETED"
+            )
+        )
+
+        val viewModel = VodPlayerViewModel(
+            providerId = "wetv",
+            dramaId = "drama-101",
+            catalogRepository = FakeCatalogRepository(mockDetail),
+            watchHistoryDao = watchHistoryDao,
+            bookmarkDao = bookmarkDao,
+            entitlementManager = entitlementManager,
+            licenseRepository = licenseRepository,
+            playerFactory = playerFactory,
+            enablePlayerCache = false,
+            downloadRecordDao = downloadRecordDao
+        )
+
+        testDispatcher.scheduler.advanceTimeBy(1000)
+        testDispatcher.scheduler.runCurrent()
+
+        val state = viewModel.uiState.value
+        assertTrue(state.isCurrentEpisodeDownloaded)
+        assertFalse(state.isLoadingPlayback)
+        assertEquals("ep-1", state.currentEpisode?.id)
+
+        viewModel.release()
+    }
+
+    @Test
+    fun vodPlayer_plays_offline_when_network_fails_in_airplane_mode() = runTest {
+        val watchHistoryDao = FakeWatchHistoryDao()
+        val bookmarkDao = FakeBookmarkDao()
+        val downloadRecordDao = FakeDownloadRecordDao()
+        val licenseRepository = FakeLicenseRepository(vipActive = true)
+        val entitlementManager = EntitlementManager(licenseRepository)
+
+        // Seed completed offline download
+        val offlineUri = "file:///data/user/0/com.dramix.app/files/dramix_downloads/ep-1.mp4"
+        downloadRecordDao.insertOrUpdateDownload(
+            DownloadRecordEntity(
+                mediaId = "ep-1",
+                dramaId = "drama-101",
+                providerId = "wetv",
+                dramaTitle = "Love Between Fairy and Devil (Offline)",
+                episodeNumber = 1,
+                streamUrl = "https://cdn.example.com/stream.m3u8",
+                localUri = offlineUri,
+                status = "COMPLETED"
+            )
+        )
+
+        // Repository that always throws network failure (Airplane Mode simulation)
+        val failingRepo = object : CatalogRepository {
+            override suspend fun getProviders(): Result<List<ProviderModel>> = Result.failure(java.net.UnknownHostException("No connection"))
+            override suspend fun getCategories(modelId: String): Result<List<Category>> = Result.failure(java.net.UnknownHostException("No connection"))
+            override suspend fun getVideos(modelId: String, categoryId: String, page: Int): Result<List<VideoItem>> = Result.failure(java.net.UnknownHostException("No connection"))
+            override suspend fun getDramaDetail(modelId: String, id: String): Result<DramaDetail> = Result.failure(java.net.UnknownHostException("Airplane mode"))
+            override suspend fun getPlaybackSource(modelId: String, episodeId: String, id: String?): Result<PlaybackSource> = Result.failure(java.net.UnknownHostException("Airplane mode"))
+            override suspend fun search(modelId: String, query: String, page: Int, contentType: String?): Result<List<VideoItem>> = Result.failure(java.net.UnknownHostException("No connection"))
+        }
+
+        val viewModel = VodPlayerViewModel(
+            providerId = "wetv",
+            dramaId = "drama-101",
+            catalogRepository = failingRepo,
+            watchHistoryDao = watchHistoryDao,
+            bookmarkDao = bookmarkDao,
+            entitlementManager = entitlementManager,
+            licenseRepository = licenseRepository,
+            playerFactory = playerFactory,
+            enablePlayerCache = false,
+            downloadRecordDao = downloadRecordDao
+        )
+
+        testDispatcher.scheduler.advanceTimeBy(1000)
+        testDispatcher.scheduler.runCurrent()
+
+        val state = viewModel.uiState.value
+        assertNotNull(state.detail)
+        assertEquals("Love Between Fairy and Devil (Offline)", state.detail?.title)
+        assertEquals(1, state.currentEpisode?.number)
+        assertTrue(state.isCurrentEpisodeDownloaded)
+        assertFalse(state.isLoadingPlayback)
 
         viewModel.release()
     }
