@@ -2,7 +2,15 @@ package com.dramix.app.ui.navigation
 
 sealed class Screen(val route: String) {
     data object Home : Screen("home")
-    data object Shorts : Screen("shorts")
+    data object Shorts : Screen("shorts?providerId={providerId}&dramaId={dramaId}") {
+        fun createRoute(providerId: String? = null, dramaId: String? = null): String {
+            return if (!providerId.isNullOrBlank() && !dramaId.isNullOrBlank()) {
+                "shorts?providerId=$providerId&dramaId=$dramaId"
+            } else {
+                "shorts"
+            }
+        }
+    }
     data object LiveTv : Screen("live_tv")
     data object Profile : Screen("profile")
     data object Search : Screen("search")

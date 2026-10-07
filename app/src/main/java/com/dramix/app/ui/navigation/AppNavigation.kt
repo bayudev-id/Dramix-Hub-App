@@ -21,6 +21,8 @@ import androidx.navigation.navArgument
 import com.dramix.app.ui.components.BottomNavigationBar
 import com.dramix.app.ui.screens.home.HomeScreen
 import com.dramix.app.ui.screens.home.HomeViewModel
+import com.dramix.app.ui.screens.player_shorts.ShortsPlayerScreen
+import com.dramix.app.ui.screens.player_shorts.ShortsPlayerViewModel
 import com.dramix.app.ui.screens.player_vod.VodPlayerScreen
 import com.dramix.app.ui.screens.player_vod.VodPlayerViewModel
 import com.dramix.app.ui.theme.PureBlack
@@ -75,8 +77,8 @@ fun AppNavigation(
                     onNavigateToVodPlayer = { providerId, dramaId ->
                         navController.navigate(Screen.VodPlayer.createRoute(providerId, dramaId))
                     },
-                    onNavigateToShorts = { _, _ ->
-                        navController.navigate(Screen.Shorts.route)
+                    onNavigateToShorts = { providerId, dramaId ->
+                        navController.navigate(Screen.Shorts.createRoute(providerId, dramaId))
                     },
                     onNavigateToSearch = {
                         navController.navigate(Screen.Search.route)
@@ -84,10 +86,29 @@ fun AppNavigation(
                 )
             }
 
-            composable(Screen.Shorts.route) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text(text = "Drama Pendek 9:16", color = Color.White)
-                }
+            composable(
+                route = Screen.Shorts.route,
+                arguments = listOf(
+                    navArgument("providerId") {
+                        type = NavType.StringType
+                        nullable = true
+                        defaultValue = null
+                    },
+                    navArgument("dramaId") {
+                        type = NavType.StringType
+                        nullable = true
+                        defaultValue = null
+                    }
+                )
+            ) { backStackEntry ->
+                val providerId = backStackEntry.arguments?.getString("providerId")
+                val dramaId = backStackEntry.arguments?.getString("dramaId")
+                val shortsViewModel: ShortsPlayerViewModel = koinViewModel { parametersOf(providerId, dramaId) }
+                ShortsPlayerScreen(
+                    viewModel = shortsViewModel,
+                    onNavigateBack = { navController.popBackStack() },
+                    onNavigateToProfile = { navController.navigate(Screen.Profile.route) }
+                )
             }
 
             composable(Screen.LiveTv.route) {
