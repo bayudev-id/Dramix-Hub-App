@@ -9,6 +9,7 @@ import com.dramix.app.core.security.SecurityManager
 import com.dramix.app.data.repository.CatalogRepositoryImpl
 import com.dramix.app.data.repository.LicenseRepositoryImpl
 import com.dramix.app.data.source.local.LicensePreferences
+import com.dramix.app.data.source.local.SearchPreferences
 import com.dramix.app.domain.manager.EntitlementManager
 import com.dramix.app.domain.repository.CatalogRepository
 import com.dramix.app.domain.repository.LicenseRepository
@@ -18,6 +19,7 @@ import com.dramix.app.ui.screens.player_shorts.ShortsPlayerViewModel
 import com.dramix.app.ui.screens.player_tv.LiveTvPlayerViewModel
 import com.dramix.app.ui.screens.player_vod.VodPlayerViewModel
 import com.dramix.app.ui.screens.profile.ProfileViewModel
+import com.dramix.app.ui.screens.search.SearchViewModel
 import org.koin.android.ext.koin.androidContext
 import org.koin.androidx.viewmodel.dsl.viewModel
 import org.koin.dsl.module
@@ -33,6 +35,7 @@ val coreModule = module {
     single { DeviceIdentifier(androidContext()) }
     single { SecurityManager() }
     single { LicensePreferences(androidContext()) }
+    single { SearchPreferences(androidContext()) }
 
     single {
         val baseClient = OkHttpProvider.createClient(deviceIdentifier = get())
@@ -106,6 +109,12 @@ val viewModelModule = module {
             bookmarkDao = get(),
             downloadRecordDao = get(),
             context = androidContext()
+        )
+    }
+    viewModel {
+        SearchViewModel(
+            catalogRepository = get(),
+            searchPreferences = get()
         )
     }
 }

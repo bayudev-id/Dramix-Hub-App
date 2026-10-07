@@ -29,6 +29,8 @@ import com.dramix.app.ui.screens.player_vod.VodPlayerScreen
 import com.dramix.app.ui.screens.player_vod.VodPlayerViewModel
 import com.dramix.app.ui.screens.profile.ProfileScreen
 import com.dramix.app.ui.screens.profile.ProfileViewModel
+import com.dramix.app.ui.screens.search.SearchScreen
+import com.dramix.app.ui.screens.search.SearchViewModel
 import com.dramix.app.ui.theme.PureBlack
 import org.koin.androidx.compose.koinViewModel
 import org.koin.core.parameter.parametersOf
@@ -167,9 +169,20 @@ fun AppNavigation(
             }
 
             composable(Screen.Search.route) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text(text = "Pencarian Multi-Provider", color = Color.White)
-                }
+                val searchViewModel: SearchViewModel = koinViewModel()
+                SearchScreen(
+                    viewModel = searchViewModel,
+                    onNavigateBack = { navController.popBackStack() },
+                    onNavigateToVodPlayer = { providerId, dramaId ->
+                        navController.navigate(Screen.VodPlayer.createRoute(providerId, dramaId))
+                    },
+                    onNavigateToShortsPlayer = { providerId, dramaId ->
+                        navController.navigate(Screen.Shorts.createRoute(providerId, dramaId))
+                    },
+                    onNavigateToLiveTvPlayer = { providerId, channelId ->
+                        navController.navigate(Screen.LiveTvPlayer.createRoute(providerId, channelId))
+                    }
+                )
             }
         }
     }
