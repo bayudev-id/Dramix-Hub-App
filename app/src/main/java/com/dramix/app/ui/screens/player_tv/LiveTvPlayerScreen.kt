@@ -46,6 +46,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.runtime.DisposableEffect
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import com.dramix.app.ui.components.CategoryChipsRow
 import com.dramix.app.ui.components.LiveChannelItem
 import com.dramix.app.ui.components.VideoPlayerSurface
@@ -61,6 +64,20 @@ fun LiveTvPlayerScreen(
     modifier: Modifier = Modifier
 ) {
     val uiState by viewModel.uiState.collectAsState()
+
+    LifecycleEventEffect(Lifecycle.Event.ON_PAUSE) {
+        viewModel.pausePlayback()
+    }
+
+    LifecycleEventEffect(Lifecycle.Event.ON_STOP) {
+        viewModel.pausePlayback()
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            viewModel.pausePlayback()
+        }
+    }
 
     // Pulsating animation for LIVE indicator
     val infiniteTransition = rememberInfiniteTransition(label = "LivePulse")

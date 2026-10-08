@@ -4,6 +4,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.dramix.app.core.database.dao.WatchHistoryDao
 import com.dramix.app.core.database.entity.WatchHistoryEntity
+import com.dramix.app.data.source.local.ProviderConfigItem
+import com.dramix.app.data.source.local.ProviderPreferences
+import com.dramix.app.data.source.local.UserProviderConfig
 import com.dramix.app.domain.model.ProviderModel
 import com.dramix.app.domain.model.VideoItem
 import com.dramix.app.domain.repository.CatalogRepository
@@ -21,16 +24,20 @@ data class HomeUiState(
     val popularVideos: List<VideoItem> = emptyList(),
     val shortDramaVideos: List<VideoItem> = emptyList(),
     val isLoading: Boolean = true,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    val isCustomizingProviders: Boolean = false
 )
 
 class HomeViewModel(
     private val catalogRepository: CatalogRepository,
-    private val watchHistoryDao: WatchHistoryDao
+    private val watchHistoryDao: WatchHistoryDao,
+    private val providerPreferences: ProviderPreferences
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(HomeUiState())
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
+
+    private var rawProviders: List<ProviderModel> = emptyList()
 
     val continueWatchingList: StateFlow<List<WatchHistoryEntity>> =
         watchHistoryDao.getLatestWatchedDramas(limit = 10)
@@ -57,14 +64,21 @@ class HomeViewModel(
                 return@launch
             }
 
-            val providers = providersResult.getOrDefault(emptyList())
-            val defaultProvider = providers.firstOrNull { it.contentType == "long_drama" }
-                ?: providers.firstOrNull { it.contentType == "movie_tv" }
-                ?: providers.firstOrNull { it.id == "freereels" }
-                ?: providers.firstOrNull()
+            rawProviders = providersResult.getOrDefault(emptyList())
+            val effectiveProviders = providerPreferences.applyToProviders(rawProviders)
+
+            val currentSelected = _uiState.value.selectedProviderId
+            val defaultProvider = if (effectiveProviders.any { it.id == currentSelected }) {
+                effectiveProviders.first { it.id == currentSelected }
+            } else {
+                effectiveProviders.firstOrNull { it.contentType == "long_drama" }
+                    ?: effectiveProviders.firstOrNull { it.contentType == "movie_tv" }
+                    ?: effectiveProviders.firstOrNull { it.id == "freereels" }
+                    ?: effectiveProviders.firstOrNull()
+            }
 
             _uiState.value = _uiState.value.copy(
-                providers = providers,
+                providers = effectiveProviders,
                 selectedProviderId = defaultProvider?.id
             )
 
@@ -74,6 +88,58 @@ class HomeViewModel(
                 _uiState.value = _uiState.value.copy(isLoading = false)
             }
         }
+    }
+
+    fun getAllProviderConfigs(): List<ProviderConfigItem> {
+        return providerPreferences.getMergedConfigItems(rawProviders)
+    }
+
+    fun updateProviderConfigs(configs: List<UserProviderConfig>) {
+        providerPreferences.saveConfigs(configs)
+        val effectiveProviders = providerPreferences.applyToProviders(rawProviders)
+
+        val currentSelected = _uiState.value.selectedProviderId
+        val nextSelectedId = if (effectiveProviders.any { it.id == currentSelected }) {
+            currentSelected
+        } else {
+            effectiveProviders.firstOrNull()?.id
+        }
+
+        _uiState.value = _uiState.value.copy(
+            providers = effectiveProviders,
+            selectedProviderId = nextSelectedId
+        )
+
+        if (nextSelectedId != null && nextSelectedId != currentSelected) {
+            viewModelScope.launch {
+                loadProviderFeed(nextSelectedId)
+            }
+        }
+    }
+
+    fun resetProviderConfigs() {
+        providerPreferences.resetToDefault()
+        val effectiveProviders = providerPreferences.applyToProviders(rawProviders)
+        val nextSelectedId = effectiveProviders.firstOrNull()?.id
+
+        _uiState.value = _uiState.value.copy(
+            providers = effectiveProviders,
+            selectedProviderId = nextSelectedId
+        )
+
+        if (nextSelectedId != null) {
+            viewModelScope.launch {
+                loadProviderFeed(nextSelectedId)
+            }
+        }
+    }
+
+    fun openProviderCustomizer() {
+        _uiState.value = _uiState.value.copy(isCustomizingProviders = true)
+    }
+
+    fun closeProviderCustomizer() {
+        _uiState.value = _uiState.value.copy(isCustomizingProviders = false)
     }
 
     fun selectProvider(providerId: String) {

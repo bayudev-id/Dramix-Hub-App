@@ -23,8 +23,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -47,6 +49,7 @@ import coil.compose.AsyncImage
 import com.dramix.app.core.database.entity.WatchHistoryEntity
 import com.dramix.app.domain.model.ProviderModel
 import com.dramix.app.domain.model.VideoItem
+import com.dramix.app.ui.components.ProviderCustomizerSheet
 import com.dramix.app.ui.components.ShimmerPlaceholder
 import com.dramix.app.ui.theme.CrimsonPlay
 import com.dramix.app.ui.theme.MidnightBorder
@@ -56,6 +59,7 @@ import com.dramix.app.ui.theme.Slate400
 import com.dramix.app.ui.theme.Slate50
 import com.dramix.app.ui.theme.TagBadgeShape
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     viewModel: HomeViewModel,
@@ -72,8 +76,11 @@ fun HomeScreen(
             .fillMaxSize()
             .background(PureBlack)
     ) {
-        // TopBar (No fake avatar, DRAMIX logo on left, Search on right)
-        HomeTopBar(onSearchClick = onNavigateToSearch)
+        // TopBar (DRAMIX logo on left, Customizer & Search on right)
+        HomeTopBar(
+            onSearchClick = onNavigateToSearch,
+            onCustomizeProvidersClick = { viewModel.openProviderCustomizer() }
+        )
 
         if (uiState.isLoading && uiState.providers.isEmpty()) {
             HomeShimmerLoading()
@@ -92,7 +99,8 @@ fun HomeScreen(
                     ProviderChipsRow(
                         providers = uiState.providers,
                         selectedProviderId = uiState.selectedProviderId,
-                        onProviderSelected = { viewModel.selectProvider(it) }
+                        onProviderSelected = { viewModel.selectProvider(it) },
+                        onCustomizeClick = { viewModel.openProviderCustomizer() }
                     )
                 }
 
@@ -170,11 +178,29 @@ fun HomeScreen(
                 }
             }
         }
+
+        if (uiState.isCustomizingProviders) {
+            ProviderCustomizerSheet(
+                initialConfigs = viewModel.getAllProviderConfigs(),
+                onSaveConfigs = { configs ->
+                    viewModel.updateProviderConfigs(configs)
+                },
+                onResetToDefault = {
+                    viewModel.resetProviderConfigs()
+                },
+                onDismissRequest = {
+                    viewModel.closeProviderCustomizer()
+                }
+            )
+        }
     }
 }
 
 @Composable
-private fun HomeTopBar(onSearchClick: () -> Unit) {
+private fun HomeTopBar(
+    onSearchClick: () -> Unit,
+    onCustomizeProvidersClick: () -> Unit
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -191,16 +217,33 @@ private fun HomeTopBar(onSearchClick: () -> Unit) {
             letterSpacing = (-0.5).sp
         )
 
-        IconButton(
-            onClick = onSearchClick,
-            modifier = Modifier.size(48.dp)
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            Icon(
-                imageVector = Icons.Default.Search,
-                contentDescription = "Cari Drama",
-                tint = Slate50,
-                modifier = Modifier.size(24.dp)
-            )
+            IconButton(
+                onClick = onCustomizeProvidersClick,
+                modifier = Modifier.size(48.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Tune,
+                    contentDescription = "Kustomisasi Provider",
+                    tint = Slate50,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+
+            IconButton(
+                onClick = onSearchClick,
+                modifier = Modifier.size(48.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Search,
+                    contentDescription = "Cari Drama",
+                    tint = Slate50,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
         }
     }
 }
@@ -209,12 +252,45 @@ private fun HomeTopBar(onSearchClick: () -> Unit) {
 private fun ProviderChipsRow(
     providers: List<ProviderModel>,
     selectedProviderId: String?,
-    onProviderSelected: (String) -> Unit
+    onProviderSelected: (String) -> Unit,
+    onCustomizeClick: () -> Unit
 ) {
     LazyRow(
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
+        item(key = "customize_chip") {
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(MidnightCard)
+                    .border(
+                        width = 1.dp,
+                        color = MidnightBorder,
+                        shape = RoundedCornerShape(20.dp)
+                    )
+                    .clickable { onCustomizeClick() }
+                    .padding(horizontal = 12.dp, vertical = 6.dp)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Tune,
+                        contentDescription = "Kustomisasi Provider",
+                        tint = CrimsonPlay,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Text(
+                        text = "Atur",
+                        color = Slate50,
+                        style = MaterialTheme.typography.labelLarge
+                    )
+                }
+            }
+        }
+
         items(providers, key = { it.id }) { provider ->
             val isSelected = provider.id == selectedProviderId
             Box(

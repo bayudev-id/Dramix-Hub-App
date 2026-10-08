@@ -1,7 +1,11 @@
 package com.dramix.app.ui.screens.home
 
+import android.content.Context
+import androidx.test.core.app.ApplicationProvider
 import com.dramix.app.core.database.dao.WatchHistoryDao
 import com.dramix.app.core.database.entity.WatchHistoryEntity
+import com.dramix.app.data.source.local.ProviderPreferences
+import com.dramix.app.data.source.local.UserProviderConfig
 import com.dramix.app.domain.model.Category
 import com.dramix.app.domain.model.DramaDetail
 import com.dramix.app.domain.model.PlaybackSource
@@ -20,13 +24,21 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
 @OptIn(ExperimentalCoroutinesApi::class)
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [30])
 class HomeViewModelTest {
 
     private val testDispatcher = StandardTestDispatcher()
+    private lateinit var context: Context
+    private lateinit var providerPreferences: ProviderPreferences
 
     private class FakeWatchHistoryDao : WatchHistoryDao {
         override suspend fun insertOrUpdateWatchHistory(history: WatchHistoryEntity): Long = 1L
@@ -53,7 +65,8 @@ class HomeViewModelTest {
         override suspend fun getProviders(): Result<List<ProviderModel>> = Result.success(
             listOf(
                 ProviderModel(id = "wetv", name = "WeTV", contentType = "long_drama"),
-                ProviderModel(id = "freereels", name = "FreeReels", contentType = "short_drama")
+                ProviderModel(id = "freereels", name = "FreeReels", contentType = "short_drama"),
+                ProviderModel(id = "viu", name = "VIU", contentType = "long_drama")
             )
         )
 
@@ -81,6 +94,9 @@ class HomeViewModelTest {
     @Before
     fun setup() {
         Dispatchers.setMain(testDispatcher)
+        context = ApplicationProvider.getApplicationContext()
+        providerPreferences = ProviderPreferences(context)
+        providerPreferences.resetToDefault()
     }
 
     @After
@@ -92,14 +108,15 @@ class HomeViewModelTest {
     fun homeViewModel_initializes_and_loads_default_feed() = runTest {
         val viewModel = HomeViewModel(
             catalogRepository = FakeCatalogRepository(),
-            watchHistoryDao = FakeWatchHistoryDao()
+            watchHistoryDao = FakeWatchHistoryDao(),
+            providerPreferences = providerPreferences
         )
 
         testDispatcher.scheduler.advanceUntilIdle()
 
         val state = viewModel.uiState.value
         assertFalse(state.isLoading)
-        assertEquals(2, state.providers.size)
+        assertEquals(3, state.providers.size)
         assertEquals("wetv", state.selectedProviderId)
         assertNotNull(state.spotlightItem)
         assertEquals("Spotlight Drama", state.spotlightItem?.title)
@@ -111,7 +128,8 @@ class HomeViewModelTest {
     fun homeViewModel_switches_provider_and_updates_state() = runTest {
         val viewModel = HomeViewModel(
             catalogRepository = FakeCatalogRepository(),
-            watchHistoryDao = FakeWatchHistoryDao()
+            watchHistoryDao = FakeWatchHistoryDao(),
+            providerPreferences = providerPreferences
         )
 
         testDispatcher.scheduler.advanceUntilIdle()
@@ -120,5 +138,54 @@ class HomeViewModelTest {
         testDispatcher.scheduler.advanceUntilIdle()
 
         assertEquals("freereels", viewModel.uiState.value.selectedProviderId)
+    }
+
+    @Test
+    fun homeViewModel_reorders_and_filters_providers_dynamically() = runTest {
+        val viewModel = HomeViewModel(
+            catalogRepository = FakeCatalogRepository(),
+            watchHistoryDao = FakeWatchHistoryDao(),
+            providerPreferences = providerPreferences
+        )
+
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        // User customizes: moves VIU first, FreeReels second, turns off WeTV
+        val newConfigs = listOf(
+            UserProviderConfig(id = "viu", isEnabled = true),
+            UserProviderConfig(id = "freereels", isEnabled = true),
+            UserProviderConfig(id = "wetv", isEnabled = false)
+        )
+        viewModel.updateProviderConfigs(newConfigs)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        val updatedState = viewModel.uiState.value
+        assertEquals(2, updatedState.providers.size)
+        assertEquals("viu", updatedState.providers[0].id)
+        assertEquals("freereels", updatedState.providers[1].id)
+        assertFalse(updatedState.providers.any { it.id == "wetv" })
+        assertEquals("viu", updatedState.selectedProviderId)
+    }
+
+    @Test
+    fun homeViewModel_resets_provider_preferences_to_default() = runTest {
+        val viewModel = HomeViewModel(
+            catalogRepository = FakeCatalogRepository(),
+            watchHistoryDao = FakeWatchHistoryDao(),
+            providerPreferences = providerPreferences
+        )
+
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        // Customize then reset
+        viewModel.updateProviderConfigs(listOf(UserProviderConfig("viu", true)))
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        viewModel.resetProviderConfigs()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        val resetState = viewModel.uiState.value
+        assertEquals(3, resetState.providers.size)
+        assertEquals("wetv", resetState.providers[0].id)
     }
 }

@@ -291,4 +291,31 @@ class ShortsPlayerViewModelTest {
 
         viewModel.release()
     }
+
+    @Test
+    fun shortsPlayer_pausePlayback_pauses_player() = runTest {
+        val watchHistoryDao = FakeWatchHistoryDao()
+        val bookmarkDao = FakeBookmarkDao()
+        val licenseRepo = FakeLicenseRepository(vipActive = true)
+        val entitlementManager = EntitlementManager(licenseRepo)
+
+        val viewModel = ShortsPlayerViewModel(
+            initialProviderId = "freereels",
+            initialDramaId = "short-101",
+            catalogRepository = FakeCatalogRepository(mockShortDramaDetail),
+            watchHistoryDao = watchHistoryDao,
+            bookmarkDao = bookmarkDao,
+            entitlementManager = entitlementManager,
+            playerFactory = playerFactory,
+            enablePlayerCache = false
+        )
+
+        testDispatcher.scheduler.advanceTimeBy(1000)
+        testDispatcher.scheduler.runCurrent()
+
+        viewModel.pausePlayback()
+        assertFalse(viewModel.playerController.player.playWhenReady)
+
+        viewModel.release()
+    }
 }

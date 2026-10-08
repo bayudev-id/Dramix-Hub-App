@@ -9,6 +9,7 @@ import com.dramix.app.core.security.SecurityManager
 import com.dramix.app.data.repository.CatalogRepositoryImpl
 import com.dramix.app.data.repository.LicenseRepositoryImpl
 import com.dramix.app.data.source.local.LicensePreferences
+import com.dramix.app.data.source.local.ProviderPreferences
 import com.dramix.app.data.source.local.SearchPreferences
 import com.dramix.app.domain.manager.EntitlementManager
 import com.dramix.app.domain.repository.CatalogRepository
@@ -38,6 +39,7 @@ val coreModule = module {
     single { SecurityManager() }
     single { LicensePreferences(androidContext()) }
     single { SearchPreferences(androidContext()) }
+    single { ProviderPreferences(androidContext()) }
 
     single {
         val baseClient = OkHttpProvider.createClient(deviceIdentifier = get())
@@ -79,7 +81,8 @@ val viewModelModule = module {
     viewModel {
         HomeViewModel(
             catalogRepository = get(),
-            watchHistoryDao = get()
+            watchHistoryDao = get(),
+            providerPreferences = get()
         )
     }
     viewModel { (providerId: String, dramaId: String) ->

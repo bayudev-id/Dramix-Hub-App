@@ -49,6 +49,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
@@ -93,12 +95,12 @@ fun ShortsPlayerScreen(
         }
     }
 
-    DisposableEffect(Unit) {
-        onDispose {
-            scope.launch {
-                viewModel.saveCurrentProgress()
-            }
-        }
+    LifecycleEventEffect(Lifecycle.Event.ON_PAUSE) {
+        viewModel.pausePlayback()
+    }
+
+    LifecycleEventEffect(Lifecycle.Event.ON_STOP) {
+        viewModel.pausePlayback()
     }
 
     val context = LocalContext.current
@@ -114,6 +116,16 @@ fun ShortsPlayerScreen(
             useController = false
             resizeMode = AspectRatioFrameLayout.RESIZE_MODE_ZOOM
             player = viewModel.playerController.player
+        }
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            viewModel.pausePlayback()
+            playerView.player = null
+            scope.launch {
+                viewModel.saveCurrentProgress()
+            }
         }
     }
 

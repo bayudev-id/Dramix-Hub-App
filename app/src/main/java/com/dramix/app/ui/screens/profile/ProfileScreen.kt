@@ -25,7 +25,9 @@ import androidx.compose.material.icons.filled.CleaningServices
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Verified
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHost
@@ -35,7 +37,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -44,13 +49,20 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.dramix.app.data.source.local.ProviderConfigItem
+import com.dramix.app.data.source.local.ProviderPreferences
+import com.dramix.app.domain.repository.CatalogRepository
+import com.dramix.app.ui.components.ProviderCustomizerSheet
 import com.dramix.app.ui.theme.CrimsonPlay
 import com.dramix.app.ui.theme.MidnightBorder
 import com.dramix.app.ui.theme.MidnightCard
 import com.dramix.app.ui.theme.PureBlack
 import com.dramix.app.ui.theme.Slate400
 import com.dramix.app.ui.theme.Slate50
+import kotlinx.coroutines.launch
+import org.koin.compose.koinInject
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProfileScreen(
     viewModel: ProfileViewModel,
@@ -59,6 +71,11 @@ fun ProfileScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
+    val providerPreferences: ProviderPreferences = koinInject()
+    val catalogRepository: CatalogRepository = koinInject()
+    val coroutineScope = rememberCoroutineScope()
+    var showProviderCustomizer by remember { mutableStateOf(false) }
+    var providerConfigs by remember { mutableStateOf<List<ProviderConfigItem>>(emptyList()) }
 
     LaunchedEffect(uiState.activationSuccessMessage) {
         uiState.activationSuccessMessage?.let { msg ->
@@ -176,6 +193,26 @@ fun ProfileScreen(
                         subtitle = "Ukuran cache: ${uiState.cacheSizeMb}",
                         onClick = { viewModel.openClearCacheDialog() }
                     )
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(1.dp)
+                            .background(MidnightBorder)
+                    )
+
+                    ProfileMenuItem(
+                        icon = Icons.Default.Tune,
+                        title = "Kustomisasi Provider",
+                        subtitle = "Atur urutan dan aktifkan/nonaktifkan provider",
+                        onClick = {
+                            coroutineScope.launch {
+                                val rawProviders = catalogRepository.getProviders().getOrNull() ?: emptyList()
+                                providerConfigs = providerPreferences.getMergedConfigItems(rawProviders)
+                                showProviderCustomizer = true
+                            }
+                        }
+                    )
                 }
             }
         }
@@ -230,6 +267,21 @@ fun ProfileScreen(
                 cacheSizeMb = uiState.cacheSizeMb,
                 onConfirm = { viewModel.clearCache() },
                 onDismiss = { viewModel.dismissClearCacheDialog() }
+            )
+        }
+
+        if (showProviderCustomizer) {
+            ProviderCustomizerSheet(
+                initialConfigs = providerConfigs,
+                onSaveConfigs = { configs ->
+                    providerPreferences.saveConfigs(configs)
+                },
+                onResetToDefault = {
+                    providerPreferences.resetToDefault()
+                },
+                onDismissRequest = {
+                    showProviderCustomizer = false
+                }
             )
         }
     }

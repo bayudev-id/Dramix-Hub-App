@@ -43,6 +43,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import com.dramix.app.ui.components.AdaptiveEpisodeList
 import com.dramix.app.ui.components.LicenseGateDialog
 import com.dramix.app.ui.components.VideoPlayerSurface
@@ -64,9 +66,18 @@ fun VodPlayerScreen(
     val uiState by viewModel.uiState.collectAsState()
     val scope = rememberCoroutineScope()
 
-    // Autosave progress when disposing/navigating back
+    LifecycleEventEffect(Lifecycle.Event.ON_PAUSE) {
+        viewModel.pausePlayback()
+    }
+
+    LifecycleEventEffect(Lifecycle.Event.ON_STOP) {
+        viewModel.pausePlayback()
+    }
+
+    // Autosave progress and pause when disposing/navigating back
     DisposableEffect(Unit) {
         onDispose {
+            viewModel.pausePlayback()
             scope.launch {
                 viewModel.saveCurrentProgress()
             }

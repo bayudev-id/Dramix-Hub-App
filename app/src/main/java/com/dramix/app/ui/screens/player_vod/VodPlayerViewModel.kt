@@ -351,6 +351,10 @@ class VodPlayerViewModel(
         }
     }
 
+    fun pausePlayback() {
+        playerController.pause()
+    }
+
     fun release() {
         historyTrackingJob?.cancel()
         historyTrackingJob = null

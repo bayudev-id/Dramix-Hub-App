@@ -182,6 +182,10 @@ class LiveTvPlayerViewModel(
         playChannel(currentChannel)
     }
 
+    fun pausePlayback() {
+        playerController.pause()
+    }
+
     fun release() {
         playerController.release()
     }

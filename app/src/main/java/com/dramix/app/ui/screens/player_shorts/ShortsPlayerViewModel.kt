@@ -249,6 +249,10 @@ class ShortsPlayerViewModel(
         _uiState.value = _uiState.value.copy(showDetailSheet = false)
     }
 
+    fun pausePlayback() {
+        playerController.pause()
+    }
+
     fun dismissLicenseGate() {
         _uiState.value = _uiState.value.copy(showLicenseGate = false)
     }
