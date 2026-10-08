@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -18,6 +19,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.dramix.app.data.source.local.LicensePreferences
 import com.dramix.app.ui.components.BottomNavigationBar
 import com.dramix.app.ui.screens.home.HomeScreen
 import com.dramix.app.ui.screens.home.HomeViewModel
@@ -34,6 +36,7 @@ import com.dramix.app.ui.screens.search.SearchScreen
 import com.dramix.app.ui.screens.search.SearchViewModel
 import com.dramix.app.ui.theme.PureBlack
 import org.koin.androidx.compose.koinViewModel
+import org.koin.compose.koinInject
 import org.koin.core.parameter.parametersOf
 
 @Composable
@@ -43,19 +46,25 @@ fun AppNavigation(
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
 
+    val licensePreferences: LicensePreferences = koinInject()
+    val isVip by licensePreferences.vipStatusFlow.collectAsState(initial = licensePreferences.isVipActive())
+
     val mainTabs = listOf(
         Screen.Home.route,
         Screen.Shorts.route,
         Screen.LiveTv.route,
         Screen.Profile.route
     )
-    val shouldShowBottomBar = currentRoute in mainTabs
+    val shouldShowBottomBar = currentRoute in mainTabs || currentRoute?.startsWith("shorts") == true
 
     Scaffold(
+        modifier = Modifier.fillMaxSize(),
+        containerColor = PureBlack,
         bottomBar = {
             if (shouldShowBottomBar) {
                 BottomNavigationBar(
                     currentRoute = currentRoute,
+                    isVip = isVip,
                     onNavigateToRoute = { route ->
                         navController.navigate(route) {
                             popUpTo(Screen.Home.route) {
