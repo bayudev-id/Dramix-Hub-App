@@ -6,6 +6,7 @@ import androidx.media3.common.C
 import com.dramix.app.domain.model.Category
 import com.dramix.app.domain.model.PlaybackSource
 import com.dramix.app.domain.model.VideoItem
+import com.dramix.app.domain.model.toLiveTvMeta
 import com.dramix.app.domain.repository.CatalogRepository
 import com.dramix.app.player.controller.DramixPlayerController
 import com.dramix.app.player.engine.PlayerFactory
@@ -24,7 +25,9 @@ data class LiveTvUiState(
     val selectedChannel: VideoItem? = null,
     val playbackSource: PlaybackSource? = null,
     val isStreamError: Boolean = false,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    val channelSearchQuery: String = "",
+    val isCategorySheetOpen: Boolean = false
 )
 
 class LiveTvPlayerViewModel(
@@ -89,10 +92,29 @@ class LiveTvPlayerViewModel(
         }
     }
 
-    fun selectCategory(category: Category) {
-        if (_uiState.value.selectedCategoryId == category.id) return
+    fun openCategorySheet() {
+        _uiState.value = _uiState.value.copy(isCategorySheetOpen = true)
+    }
 
-        _uiState.value = _uiState.value.copy(selectedCategoryId = category.id)
+    fun closeCategorySheet() {
+        _uiState.value = _uiState.value.copy(isCategorySheetOpen = false)
+    }
+
+    fun setChannelSearchQuery(query: String) {
+        _uiState.value = _uiState.value.copy(channelSearchQuery = query)
+    }
+
+    fun selectCategory(category: Category) {
+        if (_uiState.value.selectedCategoryId == category.id) {
+            _uiState.value = _uiState.value.copy(isCategorySheetOpen = false)
+            return
+        }
+
+        _uiState.value = _uiState.value.copy(
+            selectedCategoryId = category.id,
+            isCategorySheetOpen = false,
+            channelSearchQuery = ""
+        )
         viewModelScope.launch {
             loadChannelsForCategory(_uiState.value.providerId, category.id)
         }
@@ -131,10 +153,11 @@ class LiveTvPlayerViewModel(
         )
 
         viewModelScope.launch {
+            val meta = channel.toLiveTvMeta()
             val sourceResult = catalogRepository.getPlaybackSource(
                 modelId = _uiState.value.providerId,
-                episodeId = channel.id,
-                id = channel.id
+                episodeId = meta.playbackEpisodeId,
+                id = meta.playbackEpisodeId
             )
 
             if (sourceResult.isSuccess) {
@@ -148,18 +171,26 @@ class LiveTvPlayerViewModel(
                     }
 
                     // Seamless stream switch
-                    playerController.prepare(
-                        streamUrl = stream.url,
-                        headers = headers,
-                        startPositionMs = 0L,
-                        autoPlay = true
-                    )
+                    try {
+                        playerController.prepare(
+                            streamUrl = stream.url,
+                            headers = headers,
+                            startPositionMs = 0L,
+                            autoPlay = true
+                        )
 
-                    _uiState.value = _uiState.value.copy(
-                        playbackSource = source,
-                        isLoadingStream = false,
-                        isStreamError = false
-                    )
+                        _uiState.value = _uiState.value.copy(
+                            playbackSource = source,
+                            isLoadingStream = false,
+                            isStreamError = false
+                        )
+                    } catch (e: Exception) {
+                        _uiState.value = _uiState.value.copy(
+                            isLoadingStream = false,
+                            isStreamError = true,
+                            errorMessage = e.localizedMessage ?: "Gagal memuat pemutar siaran"
+                        )
+                    }
                 } else {
                     _uiState.value = _uiState.value.copy(
                         isLoadingStream = false,

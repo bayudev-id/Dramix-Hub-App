@@ -241,4 +241,76 @@ class LiveTvPlayerViewModelTest {
 
         viewModel.release()
     }
+
+    @Test
+    fun liveTv_manages_category_sheet_and_search_query() = runTest {
+        val repo = FakeTvCatalogRepository(mockTvProviders, mockCategories, mockIdChannels, mockSpChannels)
+
+        val viewModel = LiveTvPlayerViewModel(
+            initialProviderId = "CineTv",
+            initialChannelId = null,
+            catalogRepository = repo,
+            playerFactory = playerFactory,
+            enablePlayerCache = false
+        )
+
+        testDispatcher.scheduler.advanceTimeBy(1000)
+        testDispatcher.scheduler.runCurrent()
+
+        // Test category sheet opening & closing
+        assertFalse(viewModel.uiState.value.isCategorySheetOpen)
+        viewModel.openCategorySheet()
+        assertTrue(viewModel.uiState.value.isCategorySheetOpen)
+        viewModel.closeCategorySheet()
+        assertFalse(viewModel.uiState.value.isCategorySheetOpen)
+
+        // Test search query
+        viewModel.setChannelSearchQuery("rcti")
+        assertEquals("rcti", viewModel.uiState.value.channelSearchQuery)
+
+        // Test selecting category closes sheet and clears search
+        viewModel.openCategorySheet()
+        val sportsCategory = mockCategories.find { it.id == "SP" }!!
+        viewModel.selectCategory(sportsCategory)
+        testDispatcher.scheduler.advanceTimeBy(1000)
+        testDispatcher.scheduler.runCurrent()
+
+        assertFalse(viewModel.uiState.value.isCategorySheetOpen)
+        assertEquals("", viewModel.uiState.value.channelSearchQuery)
+        assertEquals("SP", viewModel.uiState.value.selectedCategoryId)
+
+        viewModel.release()
+    }
+
+    @Test
+    fun liveTv_plays_bittvd_encoded_channel_using_resolved_episode_id() = runTest {
+        val bittvdItem = VideoItem(
+            id = "bittvd_eyJ2IjoxLCJjYyI6IkVWIiwiY2lkIjoiMTQ1NSIsIm4iOiJCVE4iLCJkIjoiMDggT2t0IC0gQSB2cyBCIiwianMiOiJ0cyIsImNuIjoiRXZlbnRzIn0=",
+            title = "BTN Event"
+        )
+        val repo = FakeTvCatalogRepository(
+            mockTvProviders,
+            mockCategories,
+            listOf(bittvdItem),
+            emptyList()
+        )
+
+        val viewModel = LiveTvPlayerViewModel(
+            initialProviderId = "CineTv",
+            initialChannelId = null,
+            catalogRepository = repo,
+            playerFactory = playerFactory,
+            enablePlayerCache = false
+        )
+
+        testDispatcher.scheduler.advanceTimeBy(1000)
+        testDispatcher.scheduler.runCurrent()
+
+        val state = viewModel.uiState.value
+        assertNotNull(state.playbackSource)
+        // EpisodeId passed to getPlaybackSource must resolve to bittv:EV:1455
+        assertEquals("https://live.example.com/bittv:EV:1455/index.m3u8", state.playbackSource?.streams?.firstOrNull()?.url)
+
+        viewModel.release()
+    }
 }

@@ -64,18 +64,22 @@ class DramixPlayerController(
         startPositionMs: Long = 0L,
         autoPlay: Boolean = true
     ) {
-        headerDataSourceFactory.setHeaders(headers)
+        try {
+            headerDataSourceFactory.setHeaders(headers)
 
-        val mediaItem = MediaItem.Builder()
-            .setUri(Uri.parse(streamUrl))
-            .build()
+            val mediaItem = MediaItem.Builder()
+                .setUri(Uri.parse(streamUrl))
+                .build()
 
-        player.setMediaItem(mediaItem)
-        if (startPositionMs > 0L) {
-            player.seekTo(startPositionMs)
+            player.setMediaItem(mediaItem)
+            if (startPositionMs > 0L) {
+                player.seekTo(startPositionMs)
+            }
+            player.prepare()
+            player.playWhenReady = autoPlay
+        } catch (e: Exception) {
+            _playbackState.value = PlaybackState.Error(e.localizedMessage ?: "Gagal memuat siaran")
         }
-        player.prepare()
-        player.playWhenReady = autoPlay
     }
 
     fun play() {
