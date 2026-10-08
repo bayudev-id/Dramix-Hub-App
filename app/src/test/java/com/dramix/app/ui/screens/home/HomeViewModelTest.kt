@@ -168,6 +168,46 @@ class HomeViewModelTest {
     }
 
     @Test
+    fun homeViewModel_hierarchical_content_types_and_categories_loaded() = runTest {
+        val viewModel = HomeViewModel(
+            catalogRepository = FakeCatalogRepository(),
+            watchHistoryDao = FakeWatchHistoryDao(),
+            providerPreferences = providerPreferences
+        )
+
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertEquals(2, state.contentTypes.size)
+        assertTrue(state.contentTypes.any { it.id == "short_drama" && it.count == 1 })
+        assertTrue(state.contentTypes.any { it.id == "long_drama" && it.count == 2 })
+        assertEquals("long_drama", state.selectedContentType)
+        assertEquals(2, state.filteredProviders.size)
+        assertEquals("all", state.selectedCategoryId)
+        assertEquals(2, state.categoryVideos.size)
+    }
+
+    @Test
+    fun homeViewModel_select_content_type_switches_providers_and_feed() = runTest {
+        val viewModel = HomeViewModel(
+            catalogRepository = FakeCatalogRepository(),
+            watchHistoryDao = FakeWatchHistoryDao(),
+            providerPreferences = providerPreferences
+        )
+
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        viewModel.selectContentType("short_drama")
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertEquals("short_drama", state.selectedContentType)
+        assertEquals("freereels", state.selectedProviderId)
+        assertEquals(1, state.filteredProviders.size)
+        assertEquals("freereels", state.filteredProviders[0].id)
+    }
+
+    @Test
     fun homeViewModel_resets_provider_preferences_to_default() = runTest {
         val viewModel = HomeViewModel(
             catalogRepository = FakeCatalogRepository(),

@@ -19,8 +19,11 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Tune
@@ -33,8 +36,12 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -49,6 +56,9 @@ import coil.compose.AsyncImage
 import com.dramix.app.core.database.entity.WatchHistoryEntity
 import com.dramix.app.domain.model.ProviderModel
 import com.dramix.app.domain.model.VideoItem
+import com.dramix.app.ui.components.CategoryChipsRow
+import com.dramix.app.ui.components.CategorySelectorSheet
+import com.dramix.app.ui.components.ContentTypeChipsRow
 import com.dramix.app.ui.components.ProviderCustomizerSheet
 import com.dramix.app.ui.components.ShimmerPlaceholder
 import com.dramix.app.ui.theme.CrimsonPlay
@@ -70,6 +80,13 @@ fun HomeScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val continueWatching by viewModel.continueWatchingList.collectAsState()
+    val listState = rememberLazyListState()
+
+    var showCategorySelectorSheet by remember { mutableStateOf(false) }
+
+    LaunchedEffect(uiState.selectedContentType, uiState.selectedProviderId, uiState.selectedCategoryId) {
+        listState.scrollToItem(0)
+    }
 
     Column(
         modifier = modifier
@@ -82,39 +99,79 @@ fun HomeScreen(
             onCustomizeProvidersClick = { viewModel.openProviderCustomizer() }
         )
 
+        // Three-Level Filtering Hierarchy Block
+        if (uiState.contentTypes.isNotEmpty() || uiState.filteredProviders.isNotEmpty()) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(PureBlack)
+                    .padding(vertical = 4.dp)
+            ) {
+                // LEVEL 1: Content Type Selector (e.g. Drama Pendek 10 >, Film & Serial 13 >)
+                ContentTypeChipsRow(
+                    contentTypes = uiState.contentTypes,
+                    selectedContentType = uiState.selectedContentType,
+                    onContentTypeSelected = { viewModel.selectContentType(it) }
+                )
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                // LEVEL 2: List Provider Name (filtered by selected content type)
+                ProviderChipsRow(
+                    providers = uiState.filteredProviders,
+                    selectedProviderId = uiState.selectedProviderId,
+                    onProviderSelected = { viewModel.selectProvider(it) },
+                    onCustomizeClick = { viewModel.openProviderCustomizer() }
+                )
+
+                // LEVEL 3: Categories of Selected Provider
+                if (uiState.categories.isNotEmpty() || uiState.isLoadingCategories) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    CategoryChipsRow(
+                        categories = uiState.categories,
+                        selectedCategoryId = uiState.selectedCategoryId,
+                        isLoading = uiState.isLoadingCategories,
+                        onCategorySelected = { viewModel.selectCategory(it.id) },
+                        onOpenCategorySheet = { showCategorySelectorSheet = true }
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                // Subtle separator
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(1.dp)
+                        .background(MidnightBorder.copy(alpha = 0.5f))
+                )
+            }
+        }
+
         if (uiState.isLoading && uiState.providers.isEmpty()) {
             HomeShimmerLoading()
-        } else if (uiState.errorMessage != null && uiState.popularVideos.isEmpty()) {
+        } else if (uiState.errorMessage != null && uiState.categoryVideos.isEmpty() && uiState.popularVideos.isEmpty()) {
             HomeErrorState(
                 message = uiState.errorMessage!!,
                 onRetry = { viewModel.loadInitialData() }
             )
         } else {
             LazyColumn(
+                state = listState,
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(bottom = 16.dp)
+                contentPadding = PaddingValues(bottom = 24.dp)
             ) {
-                // Provider Chips Carousel
-                item {
-                    ProviderChipsRow(
-                        providers = uiState.providers,
-                        selectedProviderId = uiState.selectedProviderId,
-                        onProviderSelected = { viewModel.selectProvider(it) },
-                        onCustomizeClick = { viewModel.openProviderCustomizer() }
-                    )
-                }
-
                 // Spotlight Hero Banner
                 uiState.spotlightItem?.let { spotlight ->
-                    item {
+                    item(key = "spotlight_banner") {
+                        val activeProviderId = uiState.selectedProviderId ?: "freereels"
                         SpotlightBanner(
                             item = spotlight,
                             onPlayClick = {
-                                val providerId = uiState.selectedProviderId ?: "wetv"
-                                if (spotlight.type == "short_drama") {
-                                    onNavigateToShorts(providerId, spotlight.id)
+                                if (spotlight.type == "short_drama" || uiState.selectedContentType == "short_drama") {
+                                    onNavigateToShorts(activeProviderId, spotlight.id)
                                 } else {
-                                    onNavigateToVodPlayer(providerId, spotlight.id)
+                                    onNavigateToVodPlayer(activeProviderId, spotlight.id)
                                 }
                             }
                         )
@@ -123,7 +180,7 @@ fun HomeScreen(
 
                 // Continue Watching (Lanjutkan Menonton)
                 if (continueWatching.isNotEmpty()) {
-                    item {
+                    item(key = "continue_watching_section") {
                         ContinueWatchingSection(
                             historyList = continueWatching,
                             onItemClick = { history ->
@@ -133,52 +190,105 @@ fun HomeScreen(
                     }
                 }
 
-                // Popular Long Dramas Section (Poster 2:3)
-                if (uiState.popularVideos.isNotEmpty()) {
-                    item {
-                        SectionHeader(title = "Drama Populer")
-                        LazyRow(
-                            contentPadding = PaddingValues(horizontal = 16.dp),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            items(uiState.popularVideos, key = { it.id }) { video ->
-                                PosterCard2x3(
-                                    item = video,
-                                    onClick = {
-                                        val providerId = uiState.selectedProviderId ?: "wetv"
-                                        onNavigateToVodPlayer(providerId, video.id)
-                                    }
-                                )
-                            }
+                // Feed Section Header
+                item(key = "feed_section_header") {
+                    val activeCategoryName = uiState.categories.firstOrNull { it.id == uiState.selectedCategoryId }?.name
+                        ?: "Koleksi Tayangan"
+                    val activeProviderName = uiState.providers.firstOrNull { it.id == uiState.selectedProviderId }?.name
+                        ?: ""
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 10.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = if (activeProviderName.isNotBlank()) "$activeCategoryName • $activeProviderName" else activeCategoryName,
+                            color = Slate50,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false)
+                        )
+
+                        if (uiState.categoryVideos.isNotEmpty()) {
+                            Text(
+                                text = "${uiState.categoryVideos.size} Judul",
+                                color = Slate400,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Medium
+                            )
                         }
-                        Spacer(modifier = Modifier.height(20.dp))
                     }
                 }
 
-                // Trending Shorts Section (Poster 9:16)
-                if (uiState.shortDramaVideos.isNotEmpty()) {
-                    item {
-                        SectionHeader(title = "Drama Pendek Trending")
-                        LazyRow(
-                            contentPadding = PaddingValues(horizontal = 16.dp),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                if (uiState.isLoadingContent) {
+                    item(key = "content_loading_shimmer") {
+                        FeedShimmerGrid(isShorts = uiState.selectedContentType == "short_drama")
+                    }
+                } else if (uiState.categoryVideos.isEmpty()) {
+                    item(key = "empty_category_state") {
+                        EmptyCategoryState()
+                    }
+                } else {
+                    // Adaptive Grid: 3 columns for shorts and movies/dramas, 2 columns for live tv
+                    val isShorts = uiState.selectedContentType == "short_drama"
+                    val isLiveTv = uiState.selectedContentType == "live_tv"
+                    val columns = if (isLiveTv) 2 else 3
+                    val chunkedVideos = uiState.categoryVideos.chunked(columns)
+
+                    items(chunkedVideos, key = { row -> row.firstOrNull()?.id ?: row.hashCode().toString() }) { rowVideos ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 6.dp),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            items(uiState.shortDramaVideos, key = { it.id }) { video ->
-                                PosterCard9x16(
-                                    item = video,
-                                    onClick = {
-                                        val shortProvider = uiState.providers.firstOrNull { it.contentType == "short_drama" }?.id ?: "freereels"
-                                        onNavigateToShorts(shortProvider, video.id)
+                            rowVideos.forEach { video ->
+                                Box(modifier = Modifier.weight(1f)) {
+                                    val currentProviderId = uiState.selectedProviderId ?: video.source ?: "freereels"
+                                    if (isShorts) {
+                                        PosterCard9x16(
+                                            item = video,
+                                            onClick = { onNavigateToShorts(currentProviderId, video.id) }
+                                        )
+                                    } else {
+                                        PosterCard2x3(
+                                            item = video,
+                                            onClick = { onNavigateToVodPlayer(currentProviderId, video.id) }
+                                        )
                                     }
-                                )
+                                }
+                            }
+                            // Pad remaining columns if last row is incomplete
+                            repeat(columns - rowVideos.size) {
+                                Spacer(modifier = Modifier.weight(1f))
                             }
                         }
-                        Spacer(modifier = Modifier.height(20.dp))
                     }
                 }
             }
         }
 
+        // Category Selector Bottom Sheet (for providers with many categories)
+        if (showCategorySelectorSheet) {
+            CategorySelectorSheet(
+                categories = uiState.categories,
+                selectedCategoryId = uiState.selectedCategoryId ?: "",
+                onCategorySelected = { category ->
+                    viewModel.selectCategory(category.id)
+                    showCategorySelectorSheet = false
+                },
+                onDismissRequest = {
+                    showCategorySelectorSheet = false
+                }
+            )
+        }
+
+        // Provider Customizer Sheet
         if (uiState.isCustomizingProviders) {
             ProviderCustomizerSheet(
                 initialConfigs = viewModel.getAllProviderConfigs(),
@@ -204,7 +314,7 @@ private fun HomeTopBar(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(56.dp)
+            .height(54.dp)
             .padding(horizontal = 16.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
@@ -229,7 +339,7 @@ private fun HomeTopBar(
                     imageVector = Icons.Default.Tune,
                     contentDescription = "Kustomisasi Provider",
                     tint = Slate50,
-                    modifier = Modifier.size(24.dp)
+                    modifier = Modifier.size(22.dp)
                 )
             }
 
@@ -241,7 +351,7 @@ private fun HomeTopBar(
                     imageVector = Icons.Default.Search,
                     contentDescription = "Cari Drama",
                     tint = Slate50,
-                    modifier = Modifier.size(24.dp)
+                    modifier = Modifier.size(22.dp)
                 )
             }
         }
@@ -256,8 +366,9 @@ private fun ProviderChipsRow(
     onCustomizeClick: () -> Unit
 ) {
     LazyRow(
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 2.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
         item(key = "customize_chip") {
             Box(
@@ -280,12 +391,13 @@ private fun ProviderChipsRow(
                         imageVector = Icons.Default.Tune,
                         contentDescription = "Kustomisasi Provider",
                         tint = CrimsonPlay,
-                        modifier = Modifier.size(16.dp)
+                        modifier = Modifier.size(15.dp)
                     )
                     Text(
                         text = "Atur",
                         color = Slate50,
-                        style = MaterialTheme.typography.labelLarge
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium
                     )
                 }
             }
@@ -303,13 +415,30 @@ private fun ProviderChipsRow(
                         shape = RoundedCornerShape(20.dp)
                     )
                     .clickable { onProviderSelected(provider.id) }
-                    .padding(horizontal = 14.dp, vertical = 6.dp)
+                    .padding(horizontal = 12.dp, vertical = 6.dp)
             ) {
-                Text(
-                    text = provider.name,
-                    color = if (isSelected) Color.White else Slate400,
-                    style = MaterialTheme.typography.labelLarge
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    if (!provider.iconUrl.isNullOrBlank()) {
+                        AsyncImage(
+                            model = provider.iconUrl,
+                            contentDescription = provider.name,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier
+                                .size(16.dp)
+                                .clip(CircleShape)
+                        )
+                    }
+
+                    Text(
+                        text = provider.name,
+                        color = if (isSelected) Color.White else Slate400,
+                        fontSize = 13.sp,
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                    )
+                }
             }
         }
     }
@@ -323,7 +452,7 @@ private fun SpotlightBanner(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(16.dp)
+            .padding(horizontal = 16.dp, vertical = 10.dp)
             .aspectRatio(16f / 9f)
             .clip(RoundedCornerShape(12.dp))
             .clickable { onPlayClick() }
@@ -398,7 +527,14 @@ private fun ContinueWatchingSection(
     historyList: List<WatchHistoryEntity>,
     onItemClick: (WatchHistoryEntity) -> Unit
 ) {
-    SectionHeader(title = "Lanjutkan Menonton")
+    Text(
+        text = "Lanjutkan Menonton",
+        color = Slate50,
+        style = MaterialTheme.typography.titleMedium,
+        fontWeight = FontWeight.Bold,
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+    )
+
     LazyRow(
         contentPadding = PaddingValues(horizontal = 16.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -465,7 +601,7 @@ private fun ContinueWatchingSection(
             }
         }
     }
-    Spacer(modifier = Modifier.height(20.dp))
+    Spacer(modifier = Modifier.height(16.dp))
 }
 
 @Composable
@@ -475,13 +611,90 @@ private fun PosterCard2x3(
 ) {
     Column(
         modifier = Modifier
-            .width(120.dp)
+            .fillMaxWidth()
             .clickable { onClick() }
     ) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(2f / 3f)
+                .clip(RoundedCornerShape(8.dp))
+                .background(MidnightCard)
+        ) {
+            AsyncImage(
+                model = item.cover,
+                contentDescription = item.title,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+
+            if (item.isVip) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(4.dp)
+                        .clip(TagBadgeShape)
+                        .background(Color(0xFFF59E0B))
+                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                ) {
+                    Text(
+                        text = "VIP",
+                        color = Color.Black,
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+
+            item.score?.let { score ->
+                if (score.isNotBlank() && score != "0") {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .padding(4.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(Color.Black.copy(alpha = 0.7f))
+                            .padding(horizontal = 4.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = "★ $score",
+                            color = Color(0xFFF59E0B),
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(6.dp))
+
+        Text(
+            text = item.title,
+            color = Slate50,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Medium,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            lineHeight = 16.sp
+        )
+    }
+}
+
+@Composable
+private fun PosterCard9x16(
+    item: VideoItem,
+    onClick: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(9f / 16f)
                 .clip(RoundedCornerShape(8.dp))
                 .background(MidnightCard)
         ) {
@@ -516,60 +729,65 @@ private fun PosterCard2x3(
         Text(
             text = item.title,
             color = Slate50,
-            style = MaterialTheme.typography.bodyMedium,
+            fontSize = 12.sp,
             fontWeight = FontWeight.Medium,
             maxLines = 2,
-            overflow = TextOverflow.Ellipsis
+            overflow = TextOverflow.Ellipsis,
+            lineHeight = 16.sp
         )
     }
 }
 
 @Composable
-private fun PosterCard9x16(
-    item: VideoItem,
-    onClick: () -> Unit
-) {
+private fun FeedShimmerGrid(isShorts: Boolean) {
+    val aspectRatio = if (isShorts) 9f / 16f else 2f / 3f
     Column(
         modifier = Modifier
-            .width(100.dp)
-            .clickable { onClick() }
+            .fillMaxWidth()
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .aspectRatio(9f / 16f)
-                .clip(RoundedCornerShape(8.dp))
-                .background(MidnightCard)
-        ) {
-            AsyncImage(
-                model = item.cover,
-                contentDescription = item.title,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize()
-            )
+        repeat(3) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                repeat(3) {
+                    ShimmerPlaceholder(
+                        modifier = Modifier
+                            .weight(1f)
+                            .aspectRatio(aspectRatio),
+                        cornerRadius = 8.dp
+                    )
+                }
+            }
         }
-
-        Spacer(modifier = Modifier.height(6.dp))
-
-        Text(
-            text = item.title,
-            color = Slate50,
-            style = MaterialTheme.typography.bodyMedium,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
     }
 }
 
 @Composable
-private fun SectionHeader(title: String) {
-    Text(
-        text = title,
-        color = Slate50,
-        style = MaterialTheme.typography.headlineMedium,
-        fontWeight = FontWeight.Bold,
-        modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)
-    )
+private fun EmptyCategoryState() {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 48.dp, horizontal = 24.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Icon(
+                imageVector = Icons.Default.Movie,
+                contentDescription = null,
+                tint = Slate400.copy(alpha = 0.5f),
+                modifier = Modifier.size(48.dp)
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(
+                text = "Belum ada tayangan untuk kategori ini",
+                color = Slate400,
+                fontSize = 13.sp
+            )
+        }
+    }
 }
 
 @Composable
@@ -586,7 +804,7 @@ private fun HomeShimmerLoading() {
             repeat(3) {
                 ShimmerPlaceholder(
                     modifier = Modifier
-                        .width(120.dp)
+                        .weight(1f)
                         .aspectRatio(2f / 3f),
                     cornerRadius = 8.dp
                 )
@@ -601,15 +819,32 @@ private fun HomeErrorState(
     onRetry: () -> Unit
 ) {
     Box(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(24.dp),
         contentAlignment = Alignment.Center
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(text = message, color = Slate400, style = MaterialTheme.typography.bodyLarge)
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Text(
+                text = "Terjadi Kesalahan",
+                color = Slate50,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = message,
+                color = Slate400,
+                style = MaterialTheme.typography.bodyMedium
+            )
             Spacer(modifier = Modifier.height(16.dp))
             Button(
                 onClick = onRetry,
-                colors = ButtonDefaults.buttonColors(containerColor = CrimsonPlay)
+                colors = ButtonDefaults.buttonColors(containerColor = CrimsonPlay),
+                shape = RoundedCornerShape(8.dp)
             ) {
                 Text(text = "Coba Lagi", color = Color.White)
             }
