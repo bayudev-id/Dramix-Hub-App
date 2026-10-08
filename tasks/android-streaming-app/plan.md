@@ -14,32 +14,32 @@ Dokumen rencana implementasi ini memetakan urutan kerja modular berorientasi dep
 ## Phases
 
 ### Phase 1: Foundation (Tasks 01–03)
-- [ ] Task 01: Project Scaffolding & Gradle CLI Setup
-- [ ] Task 02: Cinema Dark Design Tokens & Theme Setup
-- [ ] Task 03: Local-First Room Database & DAOs
+- [x] Task 01: Project Scaffolding & Gradle CLI Setup
+- [x] Task 02: Cinema Dark Design Tokens & Theme Setup
+- [x] Task 03: Local-First Room Database & DAOs
 
 **Checkpoint 01:** `./gradlew assembleDebug` berhasil, tema Compose ter-render, dan Room Database Migration unit test lolos.
 
 ### Phase 2: Core Engine & Security (Tasks 04–06)
-- [ ] Task 04: Core Networking & Security Hardening
-- [ ] Task 05: Gateway Retrofit Client & 6 Endpoint Mappings
-- [ ] Task 06: Licensing & Entitlement Gate
+- [x] Task 04: Core Networking & Security Hardening
+- [x] Task 05: Gateway Retrofit Client & 6 Endpoint Mappings
+- [x] Task 06: Licensing & Entitlement Gate
 
 **Checkpoint 02:** SSL Pinning lolos, semua 6 endpoint Dramix Gateway (:8090) terhubung sukses, dan validasi lisensi unit test lolos.
 
 ### Phase 3: Player Engines & Direct-Play Screens (Tasks 07–13)
-- [ ] Task 07: Media3 ExoPlayer Engine & Header Injection
-- [ ] Task 08: Catalog Home Screen & Navigation Graph
-- [ ] Task 09: Direct-Play VOD Player Screen (Long Drama & Movie)
-- [ ] Task 10: Direct-Play Shorts 9:16 Screen
-- [ ] Task 11: Direct-Play Live TV Screen
-- [ ] Task 12: Profile "Saya" Screen & UI Aktivasi Lisensi
-- [ ] Task 13: Unified Search Screen
+- [x] Task 07: Media3 ExoPlayer Engine & Header Injection
+- [x] Task 08: Catalog Home Screen & Navigation Graph
+- [x] Task 09: Direct-Play VOD Player Screen (Long Drama & Movie)
+- [x] Task 10: Direct-Play Shorts 9:16 Screen
+- [x] Task 11: Direct-Play Live TV Screen
+- [x] Task 12: Profile "Saya" Screen & UI Aktivasi Lisensi
+- [x] Task 13: Unified Search Screen
 
 ### Phase 4: Offline Engine & Integration (Task 14)
-- [ ] Task 14: Background Offline Downloader (Media3 DownloadService + WorkManager)
+- [x] Task 14: Background Offline Downloader (Media3 DownloadService + WorkManager)
 
-**Final Checkpoint (Checkpoint 03):** Seluruh kriteria sukses di PRD terverifikasi, aplikasi berjalan mulus di perangkat Android fisik/emulator dengan 0 byte relay bandwidth pada host gateway.
+**Final Checkpoint (Checkpoint 03):** Seluruh kriteria sukses di PRD terverifikasi, aplikasi berjalan mulus di perangkat Android fisik/emulator dengan 0 byte relay bandwidth pada host gateway. Terverifikasi langsung pada HP fisik (M2103K19G, Android 13 SDK 33).
 
 ## Parallelization
 
