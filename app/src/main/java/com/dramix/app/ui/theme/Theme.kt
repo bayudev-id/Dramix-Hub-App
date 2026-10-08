@@ -39,9 +39,12 @@ fun DramixTheme(
 
     if (!view.isInEditMode) {
         SideEffect {
+            @Suppress("DEPRECATION")
             val window = (view.context as? Activity)?.window
             if (window != null) {
+                @Suppress("DEPRECATION")
                 window.statusBarColor = PureBlack.toArgb()
+                @Suppress("DEPRECATION")
                 window.navigationBarColor = PureBlack.toArgb()
                 WindowCompat.getInsetsController(window, view).apply {
                     isAppearanceLightStatusBars = false

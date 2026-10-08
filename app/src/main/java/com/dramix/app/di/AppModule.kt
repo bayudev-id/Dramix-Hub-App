@@ -104,7 +104,8 @@ val viewModelModule = module {
             watchHistoryDao = get(),
             bookmarkDao = get(),
             entitlementManager = get(),
-            playerFactory = get()
+            playerFactory = get(),
+            downloadTracker = get()
         )
     }
     viewModel { (providerId: String?, channelId: String?) ->

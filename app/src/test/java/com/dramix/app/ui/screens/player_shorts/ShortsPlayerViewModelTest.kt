@@ -262,4 +262,33 @@ class ShortsPlayerViewModelTest {
 
         viewModel.release()
     }
+
+    @Test
+    fun shortsPlayer_downloadCurrentEpisode_executes_safely() = runTest {
+        val watchHistoryDao = FakeWatchHistoryDao()
+        val bookmarkDao = FakeBookmarkDao()
+        val licenseRepo = FakeLicenseRepository(vipActive = true)
+        val entitlementManager = EntitlementManager(licenseRepo)
+
+        val viewModel = ShortsPlayerViewModel(
+            initialProviderId = "freereels",
+            initialDramaId = "short-101",
+            catalogRepository = FakeCatalogRepository(mockShortDramaDetail),
+            watchHistoryDao = watchHistoryDao,
+            bookmarkDao = bookmarkDao,
+            entitlementManager = entitlementManager,
+            playerFactory = playerFactory,
+            enablePlayerCache = false,
+            downloadTracker = null
+        )
+
+        testDispatcher.scheduler.advanceTimeBy(1000)
+        testDispatcher.scheduler.runCurrent()
+
+        // Call download without crash
+        viewModel.downloadCurrentEpisode()
+        assertNotNull(viewModel.uiState.value.currentPlaybackSource)
+
+        viewModel.release()
+    }
 }

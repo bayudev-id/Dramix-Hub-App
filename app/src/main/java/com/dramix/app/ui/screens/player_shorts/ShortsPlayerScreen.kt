@@ -257,7 +257,7 @@ fun ShortsPlayerScreen(
                         isBookmarked = uiState.isBookmarked,
                         onBookmarkClick = { viewModel.toggleBookmark() },
                         onEpisodesClick = { viewModel.openDetailSheet() },
-                        onDownloadClick = { /* Download handled in Task 11 */ },
+                        onDownloadClick = { viewModel.downloadCurrentEpisode() },
                         modifier = Modifier
                             .align(Alignment.BottomEnd)
                             .padding(end = 12.dp, bottom = 40.dp)

@@ -112,7 +112,7 @@ fun LicenseGateDialog(
                     onClick = onDismiss,
                     modifier = Modifier.fillMaxWidth().height(48.dp),
                     shape = RoundedCornerShape(8.dp),
-                    border = ButtonDefaults.outlinedButtonBorder.copy(brush = androidx.compose.ui.graphics.SolidColor(MidnightBorder))
+                    border = ButtonDefaults.outlinedButtonBorder(enabled = true).copy(brush = androidx.compose.ui.graphics.SolidColor(MidnightBorder))
                 ) {
                     Text(
                         text = "Nanti Saja",

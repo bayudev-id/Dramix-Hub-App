@@ -13,6 +13,7 @@ import com.dramix.app.domain.model.Episode
 import com.dramix.app.domain.model.PlaybackSource
 import com.dramix.app.domain.repository.CatalogRepository
 import com.dramix.app.player.controller.DramixPlayerController
+import com.dramix.app.player.download.DownloadTracker
 import com.dramix.app.player.engine.PlayerFactory
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -43,7 +44,8 @@ class ShortsPlayerViewModel(
     private val bookmarkDao: BookmarkDao,
     private val entitlementManager: EntitlementManager,
     playerFactory: PlayerFactory,
-    enablePlayerCache: Boolean = true
+    enablePlayerCache: Boolean = true,
+    private val downloadTracker: DownloadTracker? = null
 ) : ViewModel() {
 
     private val playerPair = playerFactory.createPlayer(enableCache = enablePlayerCache)
@@ -276,6 +278,32 @@ class ShortsPlayerViewModel(
             )
             watchHistoryDao.insertOrUpdateWatchHistory(history)
         }
+    }
+
+    fun downloadCurrentEpisode() {
+        val detail = _uiState.value.detail ?: return
+        val episodes = _uiState.value.episodes
+        val index = _uiState.value.currentEpisodeIndex
+        if (index !in episodes.indices) return
+        val ep = episodes[index]
+        val source = _uiState.value.currentPlaybackSource ?: return
+        val stream = source.streams.firstOrNull() ?: return
+
+        val headers = HashMap<String, String>().apply {
+            putAll(source.headers)
+            putAll(stream.headers)
+        }
+
+        downloadTracker?.startDownload(
+            dramaId = _uiState.value.dramaId,
+            providerId = _uiState.value.providerId,
+            dramaTitle = detail.title,
+            episodeNumber = ep.number,
+            episodeTitle = ep.title,
+            streamUrl = stream.url,
+            mediaId = ep.id,
+            headers = headers
+        )
     }
 
     fun release() {
