@@ -27,6 +27,12 @@ data class CategoryDto(
 )
 
 @JsonClass(generateAdapter = true)
+data class CategoryFeedDataDto(
+    @Json(name = "model_id") val modelId: String? = null,
+    @Json(name = "data") val data: List<CategoryDto> = emptyList()
+)
+
+@JsonClass(generateAdapter = true)
 data class VideoFeedDataDto(
     @Json(name = "model_id") val modelId: String? = null,
     @Json(name = "category_id") val categoryId: String? = null,

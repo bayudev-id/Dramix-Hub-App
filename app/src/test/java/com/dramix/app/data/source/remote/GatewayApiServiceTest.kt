@@ -83,10 +83,13 @@ class GatewayApiServiceTest {
         {
             "code": 200,
             "message": "success",
-            "data": [
-                { "id": "trending", "name": "Trending" },
-                { "id": "romance", "name": "Romance" }
-            ]
+            "data": {
+                "model_id": "wetv",
+                "data": [
+                    { "id": "trending", "name": "Trending" },
+                    { "id": "romance", "name": "Romance" }
+                ]
+            }
         }
         """.trimIndent()
 

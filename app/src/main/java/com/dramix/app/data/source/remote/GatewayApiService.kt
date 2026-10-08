@@ -1,6 +1,7 @@
 package com.dramix.app.data.source.remote
 
 import com.dramix.app.data.source.remote.dto.CategoryDto
+import com.dramix.app.data.source.remote.dto.CategoryFeedDataDto
 import com.dramix.app.data.source.remote.dto.DramaDetailDataDto
 import com.dramix.app.data.source.remote.dto.GatewayResponse
 import com.dramix.app.data.source.remote.dto.PlaybackSourceDataDto
@@ -21,7 +22,7 @@ interface GatewayApiService {
     @GET("api/modelles/categories")
     suspend fun getCategories(
         @Query("model_id") modelId: String
-    ): GatewayResponse<List<CategoryDto>>
+    ): GatewayResponse<CategoryFeedDataDto>
 
     @GET("api/modelles/videos")
     suspend fun getVideos(

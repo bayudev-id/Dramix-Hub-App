@@ -59,6 +59,8 @@ class HomeViewModel(
 
             val providers = providersResult.getOrDefault(emptyList())
             val defaultProvider = providers.firstOrNull { it.contentType == "long_drama" }
+                ?: providers.firstOrNull { it.contentType == "movie_tv" }
+                ?: providers.firstOrNull { it.id == "freereels" }
                 ?: providers.firstOrNull()
 
             _uiState.value = _uiState.value.copy(
@@ -98,7 +100,8 @@ class HomeViewModel(
             // Also fetch short drama sample if available
             val shortDramaProvider = _uiState.value.providers.firstOrNull { it.contentType == "short_drama" }
             val shortDramas = if (shortDramaProvider != null) {
-                val shortVideosResult = catalogRepository.getVideos(shortDramaProvider.id, "all", 1)
+                val shortCat = catalogRepository.getCategories(shortDramaProvider.id).getOrNull()?.firstOrNull()?.id ?: "all"
+                val shortVideosResult = catalogRepository.getVideos(shortDramaProvider.id, shortCat, 1)
                 shortVideosResult.getOrDefault(emptyList())
             } else {
                 emptyList()

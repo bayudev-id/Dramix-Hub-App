@@ -32,7 +32,7 @@ class CatalogRepositoryImpl(
 
     override suspend fun getCategories(modelId: String): Result<List<Category>> = runCatching {
         val response = apiService.getCategories(modelId)
-        (response.data ?: emptyList()).map { it.toDomain() }
+        (response.data?.data ?: emptyList()).map { it.toDomain() }
     }
 
     override suspend fun getVideos(
