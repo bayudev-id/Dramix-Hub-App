@@ -590,10 +590,16 @@ private fun PosterCard2x3(
                 .size(Size(cardWidthPx, cardHeightPx))
                 .build()
 
+            val contentScale = if (item.source?.equals("Viu", ignoreCase = true) == true) {
+                ContentScale.Inside  // Fit landscape image without cropping
+            } else {
+                ContentScale.Crop    // Crop to fill (default)
+            }
+
             AsyncImage(
                 model = imageRequest,
                 contentDescription = item.title,
-                contentScale = ContentScale.Crop,
+                contentScale = contentScale,
                 modifier = Modifier.fillMaxSize()
             )
 
