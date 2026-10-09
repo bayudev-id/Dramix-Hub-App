@@ -18,11 +18,13 @@ Format penulisan berpedoman pada [Keep a Changelog](https://keepachangelog.com/i
   7. FreeReels (`freereels`)
   8. Provider lainnya secara alfabetis.
 - **Icon Support pada Search Provider Chips**: Menampilkan ikon asli masing-masing provider (`AsyncImage` 14dp circular) dengan animasi auto-scroll ke posisi tengah saat terpilih.
+- **Search Portrait Covers**: Mengaktifkan portrait cover display di search hasil. Aspect ratio 2:3 untuk drama/film, 9:16 untuk shorts. 15/24 provider dikonfirmasi ada cover data lengkap.
 
 ### Changed
 - **Pembersihan Tab Search**: Menghapus tab filter tipe konten yang redundan ("Semua", "Drama", "Short", "Film", "Live TV") pada `SearchScreen.kt`.
 - **Standarisasi Visual Chip Provider**: Mengadopsi styling chip dari HomeScreen (`RoundedCornerShape(16.dp)`, aksen `CrimsonPlay`, background `MidnightCard`, border `MidnightBorder`).
 - **Integrasi Preferences pada Search**: Menghubungkan `ProviderPreferences` ke dalam `SearchViewModel` melalui DI Koin (`AppModule.kt`).
+- **Category Validation Fallback**: Auto-fallback ke kategori pertama jika `lastCategoryId` tidak valid/tidak ditemukan di provider baru (fix untuk HTTP 502 saat ganti provider).
 
 ---
 
