@@ -77,10 +77,12 @@ class DramixPlayerController(
         startPositionMs: Long = 0L,
         autoPlay: Boolean = true,
         subtitles: List<Subtitle> = emptyList(),
-        preferredSubtitleLang: String? = null
+        preferredSubtitleLang: String? = null,
+        streamFormat: String? = null
     ) {
         try {
             headerDataSourceFactory.setHeaders(headers)
+            headerDataSourceFactory.setStreamMetadata(streamUrl, streamFormat ?: "")
 
             val mediaItemBuilder = MediaItem.Builder()
                 .setUri(Uri.parse(streamUrl))

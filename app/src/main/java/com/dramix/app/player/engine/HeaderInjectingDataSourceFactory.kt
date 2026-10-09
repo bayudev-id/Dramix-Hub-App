@@ -14,6 +14,8 @@ class HeaderInjectingDataSourceFactory(
 ) : DataSource.Factory {
 
     private val dynamicHeaders = ConcurrentHashMap<String, String>()
+    private var streamUrl: String = ""
+    private var streamFormat: String = ""
 
     fun setHeaders(headers: Map<String, String>) {
         dynamicHeaders.clear()
@@ -30,13 +32,33 @@ class HeaderInjectingDataSourceFactory(
         dynamicHeaders.clear()
     }
 
+    fun setStreamMetadata(url: String, format: String) {
+        streamUrl = url
+        streamFormat = format.lowercase()
+    }
+
     override fun createDataSource(): DataSource {
         val okHttpDataSourceFactory = OkHttpDataSource.Factory(okHttpClient)
         if (dynamicHeaders.isNotEmpty()) {
             okHttpDataSourceFactory.setDefaultRequestProperties(dynamicHeaders)
         }
         val httpDataSource = okHttpDataSourceFactory.createDataSource()
-        // Wrap with BoundedRangeDataSource untuk chunked streaming
-        return BoundedRangeDataSource(httpDataSource, chunkSizeBytes)
+        
+        // Only wrap with BoundedRangeDataSource for progressive formats (MP4)
+        // Skip for streaming protocols (HLS, DASH, etc)
+        val shouldApplyBounding = when {
+            streamFormat == "mp4" -> true
+            streamUrl.contains(".mp4", ignoreCase = true) -> true
+            streamUrl.contains("hakunaymatata.com") -> true  // MovieBox CDN
+            streamFormat.contains("hls") || streamUrl.contains(".m3u8") -> false
+            streamFormat.contains("dash") || streamUrl.contains(".mpd") -> false
+            else -> false
+        }
+        
+        return if (shouldApplyBounding) {
+            BoundedRangeDataSource(httpDataSource, chunkSizeBytes)
+        } else {
+            httpDataSource
+        }
     }
 }

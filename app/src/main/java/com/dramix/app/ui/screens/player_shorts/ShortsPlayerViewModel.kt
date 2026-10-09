@@ -214,7 +214,8 @@ class ShortsPlayerViewModel(
                         streamUrl = stream.url,
                         headers = headers,
                         startPositionMs = 0L,
-                        autoPlay = true
+                        autoPlay = true,
+                        streamFormat = stream.format
                     )
 
                     _uiState.value = _uiState.value.copy(
@@ -296,7 +297,8 @@ class ShortsPlayerViewModel(
                         streamUrl = stream.url,
                         headers = headers,
                         startPositionMs = 0L,
-                        autoPlay = true
+                        autoPlay = true,
+                        streamFormat = stream.format
                     )
 
                     _uiState.value = _uiState.value.copy(

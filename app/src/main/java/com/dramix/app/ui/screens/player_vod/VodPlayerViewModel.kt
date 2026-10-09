@@ -506,7 +506,8 @@ class VodPlayerViewModel(
                 startPositionMs = resumePosition,
                 autoPlay = true,
                 subtitles = source.subtitles,
-                preferredSubtitleLang = if (defaultSubId != "off") defaultSubId else null
+                preferredSubtitleLang = if (defaultSubId != "off") defaultSubId else null,
+                streamFormat = defaultStream.format
             )
             android.util.Log.d("VodPlayer", "Player prepared successfully")
             playerController.setPlaybackSpeed(_uiState.value.playbackSpeed)
@@ -564,7 +565,8 @@ class VodPlayerViewModel(
             startPositionMs = currentPosition,
             autoPlay = isPlaying,
             subtitles = source.subtitles,
-            preferredSubtitleLang = _uiState.value.selectedSubtitleId.takeIf { it != "off" }
+            preferredSubtitleLang = _uiState.value.selectedSubtitleId.takeIf { it != "off" },
+            streamFormat = targetStream.format
         )
         playerController.setPlaybackSpeed(_uiState.value.playbackSpeed)
         
@@ -901,7 +903,8 @@ class VodPlayerViewModel(
                             streamUrl = stream.url,
                             headers = headers,
                             startPositionMs = _uiState.value.initialPositionMs,
-                            autoPlay = true
+                            autoPlay = true,
+                            streamFormat = stream.format
                         )
                         _uiState.value = _uiState.value.copy(
                             playbackSource = source,
