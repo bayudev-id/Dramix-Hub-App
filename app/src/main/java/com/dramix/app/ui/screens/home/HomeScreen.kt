@@ -48,6 +48,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import coil.request.ImageRequest
+import coil.size.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
@@ -546,6 +550,11 @@ private fun PosterCard2x3(
     item: VideoItem,
     onClick: () -> Unit
 ) {
+    val context = LocalContext.current
+    val density = LocalDensity.current
+    val cardWidthPx = with(density) { 360.dp.roundToPx() }
+    val cardHeightPx = (cardWidthPx * 3f / 2f).toInt()
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -558,8 +567,13 @@ private fun PosterCard2x3(
                 .clip(RoundedCornerShape(8.dp))
                 .background(MidnightCard)
         ) {
+            val imageRequest = ImageRequest.Builder(context)
+                .data(item.cover)
+                .size(Size(cardWidthPx, cardHeightPx))
+                .build()
+
             AsyncImage(
-                model = item.cover,
+                model = imageRequest,
                 contentDescription = item.title,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize()
@@ -612,6 +626,11 @@ private fun PosterCard9x16(
     item: VideoItem,
     onClick: () -> Unit
 ) {
+    val context = LocalContext.current
+    val density = LocalDensity.current
+    val cardWidthPx = with(density) { 360.dp.roundToPx() }
+    val cardHeightPx = (cardWidthPx * 16f / 9f).toInt()
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -624,8 +643,13 @@ private fun PosterCard9x16(
                 .clip(RoundedCornerShape(8.dp))
                 .background(MidnightCard)
         ) {
+            val imageRequest = ImageRequest.Builder(context)
+                .data(item.cover)
+                .size(Size(cardWidthPx, cardHeightPx))
+                .build()
+
             AsyncImage(
-                model = item.cover,
+                model = imageRequest,
                 contentDescription = item.title,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize()

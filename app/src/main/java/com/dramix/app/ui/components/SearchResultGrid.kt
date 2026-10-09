@@ -37,11 +37,15 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.snapshotFlow
+import coil.request.ImageRequest
+import coil.size.Size
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -311,7 +315,15 @@ private fun SearchVideoCard(
     isShorts: Boolean,
     onClick: () -> Unit
 ) {
+    val context = LocalContext.current
+    val density = LocalDensity.current
     val aspectRatio = if (isShorts) 9f / 16f else 2f / 3f
+    
+    // 3-column layout: ~360dp width per card on mobile
+    // 2:3 aspect = 360×540dp target
+    // Convert to pixels for ImageRequest
+    val cardWidthPx = with(density) { 360.dp.roundToPx() }
+    val cardHeightPx = (cardWidthPx / aspectRatio).toInt()
 
     Column(
         modifier = Modifier
@@ -325,8 +337,14 @@ private fun SearchVideoCard(
                 .clip(RoundedCornerShape(8.dp))
                 .background(MidnightCard)
         ) {
+            // Create ImageRequest with explicit size to reduce bandwidth
+            val imageRequest = ImageRequest.Builder(context)
+                .data(item.cover)
+                .size(Size(cardWidthPx, cardHeightPx))
+                .build()
+
             AsyncImage(
-                model = item.cover,
+                model = imageRequest,
                 contentDescription = item.title,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize()
