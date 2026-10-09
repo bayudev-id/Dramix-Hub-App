@@ -25,6 +25,7 @@ object OkHttpProvider {
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
             .writeTimeout(30, TimeUnit.SECONDS)
+            .addInterceptor(CdnRefererInterceptor())
             .addInterceptor(SecurityHeadersInterceptor(deviceIdentifier))
             .addInterceptor(loggingInterceptor)
 

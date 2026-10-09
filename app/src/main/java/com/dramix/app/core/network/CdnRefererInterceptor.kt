@@ -19,6 +19,14 @@ class CdnRefererInterceptor : Interceptor {
             }
         }
 
+        // Youku CDN requires Referer header
+        if (host.endsWith("ykimg.com")) {
+            val currentReferer = request.header("Referer")
+            if (currentReferer.isNullOrBlank()) {
+                requestBuilder.header("Referer", "https://m.youku.com/")
+            }
+        }
+
         return chain.proceed(requestBuilder.build())
     }
 }
