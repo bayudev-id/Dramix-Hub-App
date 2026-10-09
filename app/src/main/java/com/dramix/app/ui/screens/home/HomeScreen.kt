@@ -103,7 +103,7 @@ fun HomeScreen(
             val totalItems = listState.layoutInfo.totalItemsCount
             lastVisibleIndex to totalItems
         }.collect { (lastVisible, total) ->
-            if (total > 0 && lastVisible >= total - 5 && uiState.hasMoreContent && !uiState.isLoadingMore) {
+            if (total > 0 && lastVisible >= total - 5 && uiState.hasMoreContent && !uiState.isLoadingMore && !uiState.isLoadingContent && !isRefreshing) {
                 viewModel.loadMoreVideos()
             }
         }

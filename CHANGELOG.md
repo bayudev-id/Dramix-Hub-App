@@ -31,7 +31,9 @@ Format penulisan berpedoman pada [Keep a Changelog](https://keepachangelog.com/i
 
 ### Fixed
 - **Infinite Scroll Loop & Duplikasi Konten (MovieBox)**: Memperbaiki kesalahan gateway `videos.pb.js` yang sebelumnya menganggap kategori non-paginasi memiliki halaman lanjutan. Kini `hasMore` default ke `false` kecuali gateway mengembalikan boolean `true` eksplisit.
-- **Pembersihan State Pagination**: Menambahkan mekanisme reset `items`, `currentPage`, dan `hasMore` saat pengguna berpindah tab kategori di `HomeViewModel.kt`.
+- **Pembersihan State Pagination & Pull-to-Refresh Guard**: Menambahkan mekanisme reset atomik `categoryVideos`, `currentPage`, `hasMoreContent`, dan `isLoadingMore` saat pengguna berpindah tab kategori maupun melakukan gesture tarik ke bawah (*pull-to-refresh*) di `HomeViewModel.kt`.
+- **Deduplikasi ID Item Video Feed**: Pada `HomeViewModel.loadMoreVideos()`, item baru kini difilter berdasarkan ID unik dan `hasMoreContent` otomatis dinonaktifkan jika response halaman berikutnya tidak menghasilkan item baru.
+- **Race Condition Infinite Scroll Trigger**: Di `HomeScreen.kt`, `snapshotFlow` kini dipagari dengan proteksi `!uiState.isLoadingContent && !isRefreshing` untuk mencegah pemanggilan prematur `loadMoreVideos()` di tengah siklus refresh.
 
 ### Removed
 - **Hero Banner (Spotlight)**: Menghapus `SpotlightBanner` dan placeholder shimmer-nya dari `HomeScreen.kt` untuk memaksimalkan ruang tampilan katalog konten.

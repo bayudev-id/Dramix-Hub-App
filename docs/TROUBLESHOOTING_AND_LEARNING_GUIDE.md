@@ -13,56 +13,108 @@ Dokumen ini mendokumentasikan secara rinci analisis akar masalah (*root cause an
 
 ---
 
-## Kasus 1: Infinite Scroll Duplikasi & Query Loop (MovieBox Pagination)
+## Kasus 1: Infinite Scroll Duplikasi, Pull-to-Refresh & Query Loop (MovieBox Pagination)
 
 ### Gejala Masalah
-Saat pengguna menggulir (*scrolling*) katalog MovieBox pada kategori tertentu (seperti Kategori Spesifik selain "Rekomendasi"), aplikasi terus-menerus memicu request halaman berikutnya (`page + 1`), meskipun penyedia tidak memiliki pagination. Akibatnya, konten yang sama di-fetch berulang kali dan terduplikasi di antarmuka pengguna.
+1. Saat pengguna menggulir (*scrolling*) katalog MovieBox pada kategori non-trending (seperti Drama, Film, Anime selain "Rekomendasi"), aplikasi terus-menerus memicu request halaman lanjutan (`page + 1`) padahal kategori tersebut tidak memiliki pagination.
+2. Ketika pengguna melakukan **Tarik ke Bawah (Pull-to-Refresh)** pada kategori non-trending tersebut, `hasMoreContent` kembali aktif dan memicu infinite scroll kembali, mengakibatkan konten yang sama ter-append berulang kali (duplikasi item dari awal).
 
 ### Akar Masalah (Root Cause)
-1. **Kontrak Gateway Tidak Presisi**: Di layer PocketBase hook (`videos.pb.js`), logika pemetaan MovieBox menetapkan fallback nilai `has_more: true` secara default jika field pager tidak ada atau tidak bertipe boolean eksplisit.
-2. **ViewModel Kurang Proteksi Reset**: Saat pengguna mengganti kategori, status `currentPage`, `hasMore`, dan `isLoadingMore` tidak di-reset secara atomik, menyebabkan request lama bercampur dengan state kategori baru.
+1. **Ketidaksinkronan Upstream MovieBox**: Microservice upstream MovieBox (`/content?opId=...`) untuk kategori seksi operasional (non-trending) mengabaikan parameter `page` dan selalu mengembalikan daftar film statis yang sama.
+2. **Gateway Tidak Memutus Page > 1**: Pada `videos.pb.js`, permintaan `pageNum > 1` untuk kategori non-trending tetap diteruskan ke upstream, sehingga upstream mengembalikan item yang identik dan Gateway mengemasnya ulang sebagai halaman baru.
+3. **State Residu di ViewModel Saat Refresh**: Di `HomeViewModel.kt`, method `refreshCurrentCategory()` dan `selectCategory()` tidak mereset `currentPage`, `hasMoreContent`, dan `isLoadingMore` secara eksplisit sebelum memulai pemuatan baru.
+4. **Race Condition di Jetpack Compose `snapshotFlow`**: Trigger infinite scroll di `HomeScreen.kt` memantau `lastVisibleIndex >= total - 5`. Ketika pull-to-refresh dijalankan, list dikosongkan lalu diisi ulang; observer mendeteksi perubahan index dan memanggil `loadMoreVideos()` di tengah proses refresh karena tidak memeriksa flag `isLoadingContent` dan `isRefreshing`.
+5. **Ketiadaan Deduplikasi di Sisi Client**: Pada `loadMoreVideos()`, item baru langsung digabungkan (`categoryVideos + feed.items`) tanpa memeriksa apakah ID item sudah ada di dalam list sebelumnya.
 
 ### Cara Mendiagnosis
-1. **Network Payload Inspection**: Pantau response JSON dari Gateway menggunakan logcat atau interceptor OkHttp:
-   ```json
-   {
-     "code": 200,
-     "data": {
-       "items": [...],
-       "pager": { "page": 1 } // TIDAK ADA has_more
-     }
-   }
+1. **Network Payload Inspection**:
+   ```http
+   GET http://127.0.0.1:8090/api/modelles/videos?model_id=moviebox&category_id=1856704839045055408&page=2
    ```
-2. **Trace StateFlow**: Pantau `HomeUiState.hasMore` di `HomeViewModel`. Ditemukan bahwa nilai `hasMore` tetap bernilai `true` meskipun jumlah item yang kembali adalah 0 atau sama persis dengan halaman sebelumnya.
+   Sebelum perbaikan, respons mengembalikan data yang sama persis dengan `page=1`.
+2. **Trace StateFlow Android**:
+   Pantau `HomeUiState.hasMoreContent` saat pull-to-refresh dieksekusi. Terlihat `loadMoreVideos()` terpanggil seketika saat `categoryVideos` terisi kembali, memicu fetch `page=2` yang isinya menduplikasi `page=1`.
 
-### Solusi & Implementasi
-1. **Pengetatan Validasi di Gateway (`videos.pb.js`)**:
-   Hanya kembalikan `has_more: true` jika gateway secara eksplisit menerima nilai boolean `true` dari upstream provider:
-   ```javascript
-   const rawHasMore = res.json?.pager?.has_more;
-   const hasMore = typeof rawHasMore === 'boolean' ? rawHasMore : false;
-   ```
+### Solusi & Implementasi Multi-Layer
 
-2. **Dukungan Domain Model `VideoFeedPage` (`CatalogModels.kt`)**:
-   Membuat representasi halaman eksplisit agar domain layer mengetahui batas akhir feed:
-   ```kotlin
-   data class VideoFeedPage(
-       val items: List<VideoItem>,
-       val hasMore: Boolean
-   )
-   ```
+#### 1. Gateway Level (`pocketbase/pb_hooks/videos.pb.js`)
+Bedakan kategori trending dengan kategori operasional. Jika bukan trending dan `pageNum > 1`, langsung hentikan dan kembalikan array kosong dengan `has_more: false`:
+```javascript
+const isTrending = (String(categoryId) === "3521493905000087296");
+if (!isTrending && pageNum > 1) {
+    // Kategori selain Rekomendasi tidak memiliki pagination; kembalikan kosong jika page > 1
+    hasMore = false;
+    rawItems = [];
+} else {
+    // Fetch upstream & strictly validate boolean pager.has_more
+    ...
+    if (isTrending && res.json && res.json.pager && typeof res.json.pager.has_more === "boolean") {
+        hasMore = res.json.pager.has_more;
+    } else {
+        hasMore = false;
+    }
+}
+```
 
-3. **Deduplikasi dan Reset State Atomik di `HomeViewModel.kt`**:
-   - Saat `selectCategory()` dipanggil, langsung reset `items = emptyList()`, `currentPage = 1`, `hasMore = false`.
-   - Gunakan `distinctBy { it.id }` untuk mengeliminasi potensi item duplikat yang dikembalikan CDN:
-   ```kotlin
-   val updatedItems = (currentState.items + pageResult.items).distinctBy { it.id }
-   _uiState.update { it.copy(items = updatedItems, hasMore = pageResult.hasMore) }
-   ```
+#### 2. ViewModel Level (`HomeViewModel.kt`)
+Reset state pagination secara atomik saat pergantian kategori maupun pull-to-refresh, serta proteksi deduplikasi ID:
+```kotlin
+fun refreshCurrentCategory() {
+    _uiState.value = _uiState.value.copy(
+        categoryVideos = emptyList(),
+        currentPage = 1,
+        hasMoreContent = false,
+        isLoadingMore = false,
+        isLoadingContent = true
+    )
+    viewModelScope.launch {
+        loadCategoryVideos(providerId, categoryId)
+    }
+}
+
+fun loadMoreVideos() {
+    val currentState = _uiState.value
+    // Guard terhadap kondisi loading konten utama
+    if (currentState.isLoadingMore || !currentState.hasMoreContent || currentState.isLoadingContent) return
+
+    viewModelScope.launch {
+        ...
+        val existingIds = currentState.categoryVideos.map { it.id }.toSet()
+        val newUniqueItems = feed.items.filter { it.id !in existingIds }
+        // Otomatis matikan hasMoreContent jika tidak ada item baru yang unik
+        val actuallyHasMore = feed.hasMore && newUniqueItems.isNotEmpty()
+
+        _uiState.value = _uiState.value.copy(
+            categoryVideos = currentState.categoryVideos + newUniqueItems,
+            currentPage = nextPage,
+            hasMoreContent = actuallyHasMore,
+            isLoadingMore = false
+        )
+    }
+}
+```
+
+#### 3. UI Level (`HomeScreen.kt`)
+Tambahkan guard pada `snapshotFlow` infinite scroll agar tidak terpicu saat pull-to-refresh berlangsung:
+```kotlin
+LaunchedEffect(listState) {
+    snapshotFlow {
+        val lastVisibleIndex = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+        val totalItems = listState.layoutInfo.totalItemsCount
+        lastVisibleIndex to totalItems
+    }.collect { (lastVisible, total) ->
+        if (total > 0 && lastVisible >= total - 5 && 
+            uiState.hasMoreContent && !uiState.isLoadingMore && 
+            !uiState.isLoadingContent && !isRefreshing) {
+            viewModel.loadMoreVideos()
+        }
+    }
+}
+```
 
 ### Pelajaran Penting (Lessons Learned)
-- **Jangan pernah berasumsi bahwa endpoint selalu memiliki pagination**. Default pagination harus selalu `hasMore = false` (safe by default).
-- Setiap perpindahan parameter filter di antarmuka harus membatalkan job coroutine sebelumnya (`job?.cancel()`) dan mereset pagination state.
+- **Multi-Layer Defensive Design**: Masalah pagination duplikat harus dilindungi di 3 lapisan: (1) Gateway memotong request halaman melebihi kapasitas provider, (2) ViewModel memfilter duplikat ID dan mereset state saat refresh/switch kategori, dan (3) UI mencegah trigger scroll event saat operasi pembaruan berlangsung.
+- **Upstream Semantics**: Jangan mengasumsikan endpoint REST API pihak ketiga berperilaku seragam. Identifikasi secara jelas mana seksi yang mendukung pagination dinamis (seperti trending) dan mana yang berupa seksi kurasi statis (seperti banner atau kategori tetap).
 
 ---
 

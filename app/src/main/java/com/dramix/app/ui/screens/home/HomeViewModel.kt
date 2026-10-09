@@ -179,6 +179,9 @@ class HomeViewModel(
             categoryVideos = emptyList(),
             spotlightItem = null,
             popularVideos = emptyList(),
+            currentPage = 1,
+            hasMoreContent = false,
+            isLoadingMore = false,
             isLoadingContent = true
         )
 
@@ -200,6 +203,9 @@ class HomeViewModel(
         _uiState.value = _uiState.value.copy(
             selectedCategoryId = categoryId,
             categoryVideos = emptyList(),
+            currentPage = 1,
+            hasMoreContent = false,
+            isLoadingMore = false,
             isLoadingContent = true
         )
 
@@ -325,6 +331,9 @@ class HomeViewModel(
 
         _uiState.value = _uiState.value.copy(
             categoryVideos = emptyList(),
+            currentPage = 1,
+            hasMoreContent = false,
+            isLoadingMore = false,
             isLoadingContent = true
         )
 
@@ -334,7 +343,13 @@ class HomeViewModel(
     }
 
     private suspend fun loadCategoryVideos(providerId: String, categoryId: String) {
-        _uiState.value = _uiState.value.copy(isLoadingContent = true, errorMessage = null)
+        _uiState.value = _uiState.value.copy(
+            isLoadingContent = true,
+            errorMessage = null,
+            currentPage = 1,
+            hasMoreContent = false,
+            isLoadingMore = false
+        )
         val feedResult = catalogRepository.getVideoFeed(providerId, categoryId, 1)
 
         if (feedResult.isSuccess) {
@@ -362,12 +377,14 @@ class HomeViewModel(
                 hasMoreContent = feed.hasMore,
                 isLoading = false,
                 isLoadingContent = false,
+                isLoadingMore = false,
                 errorMessage = null
             )
         } else {
             _uiState.value = _uiState.value.copy(
                 isLoading = false,
                 isLoadingContent = false,
+                isLoadingMore = false,
                 errorMessage = feedResult.exceptionOrNull()?.localizedMessage ?: "Gagal memuat katalog video"
             )
         }
@@ -375,7 +392,7 @@ class HomeViewModel(
 
     fun loadMoreVideos() {
         val currentState = _uiState.value
-        if (currentState.isLoadingMore || !currentState.hasMoreContent) return
+        if (currentState.isLoadingMore || !currentState.hasMoreContent || currentState.isLoadingContent) return
 
         val providerId = currentState.selectedProviderId ?: return
         val categoryId = currentState.selectedCategoryId ?: return
@@ -395,10 +412,14 @@ class HomeViewModel(
                 }
 
                 val feed = result.getOrDefault(VideoFeedPage())
+                val existingIds = currentState.categoryVideos.map { it.id }.toSet()
+                val newUniqueItems = feed.items.filter { it.id !in existingIds }
+                val actuallyHasMore = feed.hasMore && newUniqueItems.isNotEmpty()
+
                 _uiState.value = _uiState.value.copy(
-                    categoryVideos = currentState.categoryVideos + feed.items,
+                    categoryVideos = currentState.categoryVideos + newUniqueItems,
                     currentPage = nextPage,
-                    hasMoreContent = feed.hasMore,
+                    hasMoreContent = actuallyHasMore,
                     isLoadingMore = false
                 )
             } else {
