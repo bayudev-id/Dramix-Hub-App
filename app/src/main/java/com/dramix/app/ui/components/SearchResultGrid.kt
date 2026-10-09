@@ -76,7 +76,7 @@ fun SearchResultGrid(
     val gridState = rememberLazyGridState()
 
     // Infinite scroll trigger
-    LaunchedEffect(gridState) {
+    LaunchedEffect(gridState, hasMoreResults, isLoadingMore) {
         snapshotFlow {
             val lastVisibleIndex = gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
             val totalItems = gridState.layoutInfo.totalItemsCount
