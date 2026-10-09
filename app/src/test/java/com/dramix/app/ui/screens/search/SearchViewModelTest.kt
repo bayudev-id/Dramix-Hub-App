@@ -239,4 +239,29 @@ class SearchViewModelTest {
         assertTrue(viewModel.uiState.value.results.isEmpty())
         assertFalse(viewModel.uiState.value.isLoading)
     }
+
+    @Test
+    fun search_orders_providers_according_to_preferred_order() = runTest {
+        val unorderedProviders = listOf(
+            ProviderModel(id = "netshort", name = "NetShort"),
+            ProviderModel(id = "freereels", name = "FreeReels"),
+            ProviderModel(id = "kisskh", name = "KissKH"),
+            ProviderModel(id = "wetv", name = "WeTV"),
+            ProviderModel(id = "moviebox", name = "MovieBox"),
+            ProviderModel(id = "iqiyi", name = "iQIYI"),
+            ProviderModel(id = "viu", name = "VIU")
+        )
+        val repo = FakeSearchCatalogRepository(unorderedProviders, emptyList())
+        val viewModel = SearchViewModel(repo, searchPreferences)
+
+        testDispatcher.scheduler.advanceTimeBy(100)
+        testDispatcher.scheduler.runCurrent()
+
+        val orderedIds = viewModel.uiState.value.availableProviders.map { it.id }
+        assertEquals(
+            listOf("wetv", "moviebox", "viu", "kisskh", "iqiyi", "freereels", "netshort"),
+            orderedIds
+        )
+        assertEquals("wetv", viewModel.uiState.value.selectedProviderId)
+    }
 }

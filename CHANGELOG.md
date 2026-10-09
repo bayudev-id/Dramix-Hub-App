@@ -7,6 +7,23 @@ Format penulisan berpedoman pada [Keep a Changelog](https://keepachangelog.com/i
 
 ## [Unreleased]
 
+### Added
+- **Provider Priority Reordering**: Mengatur urutan prioritas resmi provider pada Search & Home:
+  1. WeTV (`wetv`)
+  2. MovieBox (`moviebox`)
+  3. VIU (`viu`)
+  4. KissKH (`kisskh`)
+  5. iQIYI (`iqiyi`)
+  6. Youku (`youku`)
+  7. FreeReels (`freereels`)
+  8. Provider lainnya secara alfabetis.
+- **Icon Support pada Search Provider Chips**: Menampilkan ikon asli masing-masing provider (`AsyncImage` 14dp circular) dengan animasi auto-scroll ke posisi tengah saat terpilih.
+
+### Changed
+- **Pembersihan Tab Search**: Menghapus tab filter tipe konten yang redundan ("Semua", "Drama", "Short", "Film", "Live TV") pada `SearchScreen.kt`.
+- **Standarisasi Visual Chip Provider**: Mengadopsi styling chip dari HomeScreen (`RoundedCornerShape(16.dp)`, aksen `CrimsonPlay`, background `MidnightCard`, border `MidnightBorder`).
+- **Integrasi Preferences pada Search**: Menghubungkan `ProviderPreferences` ke dalam `SearchViewModel` melalui DI Koin (`AppModule.kt`).
+
 ---
 
 ## [1.2.0] - 2026-10-09

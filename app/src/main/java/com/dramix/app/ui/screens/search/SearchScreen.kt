@@ -7,47 +7,40 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
+import com.dramix.app.domain.model.ProviderModel
 import com.dramix.app.domain.model.VideoItem
 import com.dramix.app.ui.components.SearchBarComponent
 import com.dramix.app.ui.components.SearchResultGrid
+import com.dramix.app.ui.components.animateToCentered
 import com.dramix.app.ui.theme.CrimsonPlay
 import com.dramix.app.ui.theme.MidnightBorder
 import com.dramix.app.ui.theme.MidnightCard
 import com.dramix.app.ui.theme.PureBlack
 import com.dramix.app.ui.theme.Slate400
-import com.dramix.app.ui.theme.Slate50
-
-private data class ContentTypeFilter(
-    val label: String,
-    val value: String?
-)
-
-private val CONTENT_TYPE_FILTERS = listOf(
-    ContentTypeFilter("Semua", null),
-    ContentTypeFilter("Drama", "long_drama"),
-    ContentTypeFilter("Shorts", "short_drama"),
-    ContentTypeFilter("Film", "movie"),
-    ContentTypeFilter("Live TV", "live_tv")
-)
 
 @Composable
 fun SearchScreen(
@@ -75,72 +68,15 @@ fun SearchScreen(
 
         Spacer(modifier = Modifier.height(4.dp))
 
-        // Content Type Filter Chips
-        LazyRow(
-            modifier = Modifier.fillMaxWidth(),
-            contentPadding = PaddingValues(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            items(CONTENT_TYPE_FILTERS) { filter ->
-                val isSelected = uiState.selectedContentType == filter.value
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(if (isSelected) CrimsonPlay else MidnightCard)
-                        .border(
-                            width = 1.dp,
-                            color = if (isSelected) CrimsonPlay else MidnightBorder,
-                            shape = RoundedCornerShape(8.dp)
-                        )
-                        .clickable { viewModel.onContentTypeChange(filter.value) }
-                        .padding(horizontal = 12.dp, vertical = 6.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = filter.label,
-                        color = if (isSelected) Color.White else Slate400,
-                        fontSize = 12.sp,
-                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
-                    )
-                }
-            }
+        // Provider Selector Chips (HomeScreen style with icons & centered auto-scroll)
+        if (uiState.availableProviders.isNotEmpty()) {
+            SearchProviderChipsRow(
+                providers = uiState.availableProviders,
+                selectedProviderId = uiState.selectedProviderId,
+                onProviderSelected = { viewModel.onProviderChange(it) }
+            )
+            Spacer(modifier = Modifier.height(4.dp))
         }
-
-        // Provider Selector Chips (if > 1 provider available)
-        if (uiState.availableProviders.size > 1) {
-            Spacer(modifier = Modifier.height(8.dp))
-            LazyRow(
-                modifier = Modifier.fillMaxWidth(),
-                contentPadding = PaddingValues(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                items(uiState.availableProviders, key = { it.id }) { provider ->
-                    val isSelected = uiState.selectedProviderId == provider.id
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(if (isSelected) Slate400.copy(alpha = 0.25f) else PureBlack)
-                            .border(
-                                width = 1.dp,
-                                color = if (isSelected) Slate50 else MidnightBorder,
-                                shape = RoundedCornerShape(6.dp)
-                            )
-                            .clickable { viewModel.onProviderChange(provider.id) }
-                            .padding(horizontal = 10.dp, vertical = 4.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = provider.name,
-                            color = if (isSelected) Slate50 else Slate400,
-                            fontSize = 11.sp,
-                            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
-                        )
-                    }
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(8.dp))
 
         // Search Results / History Area
         SearchResultGrid(
@@ -163,6 +99,74 @@ fun SearchScreen(
                 )
             }
         )
+    }
+}
+
+@Composable
+private fun SearchProviderChipsRow(
+    providers: List<ProviderModel>,
+    selectedProviderId: String?,
+    onProviderSelected: (String) -> Unit
+) {
+    val listState = rememberLazyListState()
+
+    // Auto-scroll to selected provider (centered)
+    LaunchedEffect(selectedProviderId) {
+        selectedProviderId?.let { selected ->
+            val selectedIndex = providers.indexOfFirst { it.id == selected }
+            if (selectedIndex >= 0) {
+                listState.animateToCentered(selectedIndex)
+            }
+        }
+    }
+
+    LazyRow(
+        state = listState,
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 2.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        items(providers, key = { it.id }) { provider ->
+            val isSelected = provider.id == selectedProviderId
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(
+                        if (isSelected) CrimsonPlay.copy(alpha = 0.22f)
+                        else MidnightCard
+                    )
+                    .border(
+                        width = 1.dp,
+                        color = if (isSelected) CrimsonPlay else MidnightBorder.copy(alpha = 0.7f),
+                        shape = RoundedCornerShape(16.dp)
+                    )
+                    .clickable { onProviderSelected(provider.id) }
+                    .padding(horizontal = 12.dp, vertical = 5.dp)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    if (!provider.iconUrl.isNullOrBlank()) {
+                        AsyncImage(
+                            model = provider.iconUrl,
+                            contentDescription = provider.name,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier
+                                .size(14.dp)
+                                .clip(CircleShape)
+                        )
+                    }
+
+                    Text(
+                        text = provider.name,
+                        color = if (isSelected) CrimsonPlay else Slate400,
+                        fontSize = 12.sp,
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                    )
+                }
+            }
+        }
     }
 }
 

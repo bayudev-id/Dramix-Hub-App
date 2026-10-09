@@ -2,6 +2,7 @@ package com.dramix.app.ui.screens.search
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.dramix.app.data.source.local.ProviderPreferences
 import com.dramix.app.data.source.local.SearchPreferences
 import com.dramix.app.domain.model.ProviderModel
 import com.dramix.app.domain.model.VideoItem
@@ -28,8 +29,21 @@ data class SearchUiState(
 @OptIn(FlowPreview::class)
 class SearchViewModel(
     private val catalogRepository: CatalogRepository,
-    private val searchPreferences: SearchPreferences
+    private val searchPreferences: SearchPreferences,
+    private val providerPreferences: ProviderPreferences? = null
 ) : ViewModel() {
+
+    companion object {
+        val PREFERRED_PROVIDER_ORDER = listOf(
+            "wetv",
+            "moviebox",
+            "viu",
+            "kisskh",
+            "iqiyi",
+            "youku",
+            "freereels"
+        )
+    }
 
     private val _uiState = MutableStateFlow(SearchUiState())
     val uiState: StateFlow<SearchUiState> = _uiState.asStateFlow()
@@ -43,16 +57,27 @@ class SearchViewModel(
         setupDebouncedSearch()
     }
 
+    private fun sortProviders(providers: List<ProviderModel>): List<ProviderModel> {
+        return providers.sortedWith(
+            compareBy<ProviderModel> { provider ->
+                val idx = PREFERRED_PROVIDER_ORDER.indexOf(provider.id.lowercase())
+                if (idx >= 0) idx else Int.MAX_VALUE
+            }.thenBy { it.name.lowercase() }
+        )
+    }
+
     private fun loadProviders() {
         viewModelScope.launch {
             val providersResult = catalogRepository.getProviders()
-            val providers = providersResult.getOrNull() ?: emptyList()
-            val defaultProvider = providers.firstOrNull { it.status == "active" }?.id
-                ?: providers.firstOrNull()?.id
+            val rawProviders = providersResult.getOrNull() ?: emptyList()
+            val orderedProviders = sortProviders(rawProviders)
+            val effectiveProviders = providerPreferences?.applyToProviders(orderedProviders) ?: orderedProviders
+            val defaultProvider = effectiveProviders.firstOrNull { it.status == "active" }?.id
+                ?: effectiveProviders.firstOrNull()?.id
                 ?: "wetv"
 
             _uiState.value = _uiState.value.copy(
-                availableProviders = providers,
+                availableProviders = effectiveProviders,
                 selectedProviderId = defaultProvider
             )
         }

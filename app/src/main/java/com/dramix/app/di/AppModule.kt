@@ -134,7 +134,8 @@ val viewModelModule = module {
     viewModel {
         SearchViewModel(
             catalogRepository = get(),
-            searchPreferences = get()
+            searchPreferences = get(),
+            providerPreferences = get()
         )
     }
 }
