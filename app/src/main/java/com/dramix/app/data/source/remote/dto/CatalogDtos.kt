@@ -127,5 +127,6 @@ data class SearchDataDto(
     @Json(name = "model_id") val modelId: String? = null,
     @Json(name = "q") val q: String? = null,
     @Json(name = "page") val page: Int? = 1,
+    @Json(name = "has_more") val hasMore: Boolean = false,
     @Json(name = "items") val items: List<VideoItemDto> = emptyList()
 )

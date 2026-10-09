@@ -16,4 +16,12 @@ interface CatalogRepository {
     suspend fun getDramaDetail(modelId: String, id: String): Result<DramaDetail>
     suspend fun getPlaybackSource(modelId: String, episodeId: String, id: String? = null): Result<PlaybackSource>
     suspend fun search(modelId: String, query: String, page: Int = 1, contentType: String? = null): Result<List<VideoItem>>
+    suspend fun getSearchFeed(modelId: String, query: String, page: Int = 1, contentType: String? = null): Result<com.dramix.app.domain.model.SearchFeedPage> =
+        search(modelId, query, page, contentType).map { 
+            com.dramix.app.domain.model.SearchFeedPage(
+                items = it,
+                hasMore = it.size >= 10,
+                currentPage = page
+            )
+        }
 }

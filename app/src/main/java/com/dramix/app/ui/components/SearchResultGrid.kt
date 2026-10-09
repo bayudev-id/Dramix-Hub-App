@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -34,6 +35,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -61,12 +64,30 @@ fun SearchResultGrid(
     query: String,
     selectedContentType: String?,
     recentQueries: List<String>,
+    hasMoreResults: Boolean = false,
+    isLoadingMore: Boolean = false,
+    onLoadMore: () -> Unit = {},
     onSelectRecentQuery: (String) -> Unit,
     onDeleteRecentQuery: (String) -> Unit,
     onClearAllRecentQueries: () -> Unit,
     onItemClick: (VideoItem) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val gridState = rememberLazyGridState()
+
+    // Infinite scroll trigger
+    LaunchedEffect(gridState) {
+        snapshotFlow {
+            val lastVisibleIndex = gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+            val totalItems = gridState.layoutInfo.totalItemsCount
+            lastVisibleIndex to totalItems
+        }.collect { (lastVisible, total) ->
+            if (total > 0 && lastVisible >= total - 5 && hasMoreResults && !isLoadingMore) {
+                onLoadMore()
+            }
+        }
+    }
+
     Box(modifier = modifier.fillMaxSize()) {
         when {
             isLoading -> {
@@ -155,6 +176,7 @@ fun SearchResultGrid(
 
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(columns),
+                    state = gridState,
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(16.dp),
                     horizontalArrangement = Arrangement.spacedBy(10.dp),

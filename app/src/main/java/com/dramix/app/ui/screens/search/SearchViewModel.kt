@@ -23,7 +23,10 @@ data class SearchUiState(
     val results: List<VideoItem> = emptyList(),
     val recentQueries: List<String> = emptyList(),
     val isLoading: Boolean = false,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    val currentPage: Int = 1,
+    val hasMoreResults: Boolean = false,
+    val isLoadingMore: Boolean = false
 )
 
 @OptIn(FlowPreview::class)
@@ -136,7 +139,13 @@ class SearchViewModel(
 
     fun onProviderChange(providerId: String) {
         if (_uiState.value.selectedProviderId == providerId) return
-        _uiState.value = _uiState.value.copy(selectedProviderId = providerId)
+        _uiState.value = _uiState.value.copy(
+            selectedProviderId = providerId,
+            results = emptyList(),
+            currentPage = 1,
+            hasMoreResults = false,
+            isLoadingMore = false
+        )
 
         val currentQuery = _uiState.value.query.trim()
         if (currentQuery.isNotBlank()) {
@@ -144,7 +153,8 @@ class SearchViewModel(
                 query = currentQuery,
                 contentType = _uiState.value.selectedContentType,
                 providerId = providerId,
-                saveToHistory = false
+                saveToHistory = false,
+                page = 1
             )
         }
     }
@@ -178,38 +188,81 @@ class SearchViewModel(
         query: String,
         contentType: String?,
         providerId: String,
-        saveToHistory: Boolean
+        saveToHistory: Boolean,
+        page: Int = 1
     ) {
         val clean = query.trim()
         if (clean.isBlank()) return
 
-        if (saveToHistory) {
+        if (saveToHistory && page == 1) {
             searchPreferences.saveQuery(clean)
         }
 
-        searchJob?.cancel()
-        searchJob = viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
+        if (page == 1) {
+            searchJob?.cancel()
+        }
 
-            val result = catalogRepository.search(
+        val isInitialSearch = page == 1
+        searchJob = viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(
+                isLoading = isInitialSearch,
+                isLoadingMore = !isInitialSearch,
+                errorMessage = null
+            )
+
+            val result = catalogRepository.getSearchFeed(
                 modelId = providerId,
                 query = clean,
-                page = 1,
+                page = page,
                 contentType = contentType
             )
 
             if (result.isSuccess) {
+                val searchFeed = result.getOrNull()
+                val newItems = searchFeed?.items ?: emptyList()
+                val hasMore = searchFeed?.hasMore ?: false
+                val combinedResults = if (isInitialSearch) newItems else _uiState.value.results + newItems
+                
+                // Deduplicate by ID
+                val seenIds = mutableSetOf<String>()
+                val deduped = combinedResults.filter { item ->
+                    if (seenIds.contains(item.id)) false else {
+                        seenIds.add(item.id)
+                        true
+                    }
+                }
+
                 _uiState.value = _uiState.value.copy(
-                    results = result.getOrNull() ?: emptyList(),
-                    isLoading = false
+                    results = deduped,
+                    isLoading = false,
+                    isLoadingMore = false,
+                    currentPage = page,
+                    hasMoreResults = hasMore
                 )
             } else {
                 _uiState.value = _uiState.value.copy(
-                    results = emptyList(),
                     isLoading = false,
+                    isLoadingMore = false,
                     errorMessage = result.exceptionOrNull()?.localizedMessage ?: "Pencarian gagal"
                 )
             }
         }
+    }
+
+    fun loadMoreResults() {
+        val query = _uiState.value.query
+        val contentType = _uiState.value.selectedContentType
+        val providerId = _uiState.value.selectedProviderId
+        val nextPage = _uiState.value.currentPage + 1
+
+        if (query.isBlank() || !_uiState.value.hasMoreResults || _uiState.value.isLoadingMore) return
+
+        executeSearch(
+            query = query,
+            contentType = contentType,
+            providerId = providerId,
+            saveToHistory = false,
+            page = nextPage
+        )
     }
 }

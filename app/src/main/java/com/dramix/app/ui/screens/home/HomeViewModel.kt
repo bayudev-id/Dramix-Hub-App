@@ -312,17 +312,28 @@ class HomeViewModel(
 
         val categoriesResult = catalogRepository.getCategories(providerId)
         val categories = categoriesResult.getOrDefault(emptyList())
-        val activeCategory = categoryId
-            ?: categories.firstOrNull()?.id
-            ?: "all"
+        
+        // Validasi categoryId: jika disediakan tapi tidak ada di list, gunakan kategori pertama
+        val validCategoryId = if (categoryId != null && categories.any { it.id == categoryId }) {
+            categoryId
+        } else {
+            categories.firstOrNull()?.id ?: "all"
+        }
 
         _uiState.value = _uiState.value.copy(
             categories = categories,
-            selectedCategoryId = activeCategory,
+            selectedCategoryId = validCategoryId,
             isLoadingCategories = false
         )
+        
+        // Sync preferences dengan kategori yang valid
+        providerPreferences.saveLastSelection(
+            contentType = _uiState.value.selectedContentType,
+            providerId = providerId,
+            categoryId = validCategoryId
+        )
 
-        loadCategoryVideos(providerId, activeCategory)
+        loadCategoryVideos(providerId, validCategoryId)
     }
 
     fun refreshCurrentCategory() {

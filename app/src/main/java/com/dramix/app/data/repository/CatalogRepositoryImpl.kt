@@ -87,6 +87,22 @@ class CatalogRepositoryImpl(
         (response.data?.items ?: emptyList()).map { it.toDomain() }
     }
 
+    override suspend fun getSearchFeed(
+        modelId: String,
+        query: String,
+        page: Int,
+        contentType: String?
+    ): Result<com.dramix.app.domain.model.SearchFeedPage> = runCatching {
+        val response = apiService.search(modelId, query, page, contentType)
+        val data = response.data
+        val items = (data?.items ?: emptyList()).map { it.toDomain() }
+        com.dramix.app.domain.model.SearchFeedPage(
+            items = items,
+            hasMore = data?.hasMore ?: false,
+            currentPage = page
+        )
+    }
+
     private fun ProviderModelDto.toDomain() = ProviderModel(
         id = id,
         name = name,
