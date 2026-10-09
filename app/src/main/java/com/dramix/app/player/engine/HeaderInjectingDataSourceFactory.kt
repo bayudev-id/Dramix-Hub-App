@@ -9,7 +9,8 @@ import java.util.concurrent.ConcurrentHashMap
 
 @OptIn(UnstableApi::class)
 class HeaderInjectingDataSourceFactory(
-    private val okHttpClient: OkHttpClient
+    private val okHttpClient: OkHttpClient,
+    private val chunkSizeBytes: Long = 10L * 1024 * 1024 // 10 MB default
 ) : DataSource.Factory {
 
     private val dynamicHeaders = ConcurrentHashMap<String, String>()
@@ -34,6 +35,8 @@ class HeaderInjectingDataSourceFactory(
         if (dynamicHeaders.isNotEmpty()) {
             okHttpDataSourceFactory.setDefaultRequestProperties(dynamicHeaders)
         }
-        return okHttpDataSourceFactory.createDataSource()
+        val httpDataSource = okHttpDataSourceFactory.createDataSource()
+        // Wrap with BoundedRangeDataSource untuk chunked streaming
+        return BoundedRangeDataSource(httpDataSource, chunkSizeBytes)
     }
 }
