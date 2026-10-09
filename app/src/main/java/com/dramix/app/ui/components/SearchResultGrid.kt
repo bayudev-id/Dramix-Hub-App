@@ -67,6 +67,7 @@ fun SearchResultGrid(
     isLoading: Boolean,
     query: String,
     selectedContentType: String?,
+    selectedProviderId: String? = null,
     recentQueries: List<String>,
     hasMoreResults: Boolean = false,
     isLoadingMore: Boolean = false,
@@ -176,7 +177,8 @@ fun SearchResultGrid(
             else -> {
                 // Grid of search results
                 val isShorts = selectedContentType == "short_drama"
-                val columns = if (isShorts) 3 else 3
+                val isKissKH = selectedProviderId?.equals("kisskh", ignoreCase = true) == true
+                val columns = if (isKissKH) 2 else 3  // KissKH uses 2-column for landscape covers
 
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(columns),

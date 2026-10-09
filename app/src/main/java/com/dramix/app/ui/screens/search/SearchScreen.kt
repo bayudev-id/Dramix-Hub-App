@@ -84,6 +84,7 @@ fun SearchScreen(
             isLoading = uiState.isLoading,
             query = uiState.query,
             selectedContentType = uiState.selectedContentType,
+            selectedProviderId = uiState.selectedProviderId,
             recentQueries = uiState.recentQueries,
             hasMoreResults = uiState.hasMoreResults,
             isLoadingMore = uiState.isLoadingMore,
