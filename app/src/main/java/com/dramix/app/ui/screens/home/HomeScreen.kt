@@ -490,8 +490,18 @@ private fun ContinueWatchingSection(
                     .background(MidnightCard)
                     .clickable { onItemClick(history) }
             ) {
+                val context = LocalContext.current
+                val density = LocalDensity.current
+                val cardWidthPx = with(density) { 180.dp.roundToPx() }
+                val cardHeightPx = (cardWidthPx * 9f / 16f).toInt()
+                
+                val imageRequest = ImageRequest.Builder(context)
+                    .data(history.dramaPoster)
+                    .size(Size(cardWidthPx, cardHeightPx))
+                    .build()
+
                 AsyncImage(
-                    model = history.dramaPoster,
+                    model = imageRequest,
                     contentDescription = history.dramaTitle,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize()
