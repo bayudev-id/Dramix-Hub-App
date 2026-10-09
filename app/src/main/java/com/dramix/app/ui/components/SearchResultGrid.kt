@@ -317,11 +317,15 @@ private fun SearchVideoCard(
 ) {
     val context = LocalContext.current
     val density = LocalDensity.current
-    val aspectRatio = if (isShorts) 9f / 16f else 2f / 3f
+    
+    // Provider-specific aspect ratios
+    val aspectRatio = when {
+        isShorts -> 9f / 16f
+        item.source?.equals("KissKH", ignoreCase = true) == true -> 16f / 9f  // landscape
+        else -> 2f / 3f  // portrait (default)
+    }
     
     // 3-column layout: ~360dp width per card on mobile
-    // 2:3 aspect = 360×540dp target
-    // Convert to pixels for ImageRequest
     val cardWidthPx = with(density) { 360.dp.roundToPx() }
     val cardHeightPx = (cardWidthPx / aspectRatio).toInt()
 
