@@ -8,6 +8,7 @@ Format penulisan berpedoman pada [Keep a Changelog](https://keepachangelog.com/i
 ## [Unreleased]
 
 ### Added
+- **Search Infinite Scroll Pagination**: Menambahkan dukungan infinite scrolling di `SearchScreen` yang setara dengan `HomeScreen`. Mengonsumsi field `has_more` dari response gateway, memicu auto-load page berikutnya saat mencapai 5 item dari batas bawah grid, melakukan deduplikasi ID secara otomatis, dan me-reset state pagination saat kata kunci atau provider berubah.
 - **Provider Priority Reordering**: Mengatur urutan prioritas resmi provider pada Search & Home:
   1. WeTV (`wetv`)
   2. MovieBox (`moviebox`)
