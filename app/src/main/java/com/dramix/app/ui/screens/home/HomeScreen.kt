@@ -253,10 +253,11 @@ fun HomeScreen(
                         EmptyCategoryState()
                     }
                 } else {
-                    // Adaptive Grid: 3 columns for shorts and movies/dramas, 2 columns for live tv
+                    // Adaptive Grid: 3 columns default, 2 columns for live tv or KissKH landscape
                     val isShorts = uiState.selectedContentType == "short_drama"
                     val isLiveTv = uiState.selectedContentType == "live_tv"
-                    val columns = if (isLiveTv) 2 else 3
+                    val isKissKH = uiState.selectedProviderId?.equals("kisskh", ignoreCase = true) == true
+                    val columns = if (isLiveTv || isKissKH) 2 else 3
                     val chunkedVideos = uiState.categoryVideos.chunked(columns)
 
                     items(chunkedVideos, key = { row -> row.firstOrNull()?.id ?: row.hashCode().toString() }) { rowVideos ->
@@ -552,8 +553,15 @@ private fun PosterCard2x3(
 ) {
     val context = LocalContext.current
     val density = LocalDensity.current
+    
+    // Provider-specific aspect ratios
+    val aspectRatio = when {
+        item.source?.equals("KissKH", ignoreCase = true) == true -> 16f / 9f  // landscape
+        else -> 2f / 3f  // portrait (default)
+    }
+    
     val cardWidthPx = with(density) { 360.dp.roundToPx() }
-    val cardHeightPx = (cardWidthPx * 3f / 2f).toInt()
+    val cardHeightPx = (cardWidthPx / aspectRatio).toInt()
 
     Column(
         modifier = Modifier
@@ -563,7 +571,7 @@ private fun PosterCard2x3(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .aspectRatio(2f / 3f)
+                .aspectRatio(aspectRatio)
                 .clip(RoundedCornerShape(8.dp))
                 .background(MidnightCard)
         ) {
