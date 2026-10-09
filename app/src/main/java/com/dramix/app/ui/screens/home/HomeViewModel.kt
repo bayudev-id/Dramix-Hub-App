@@ -9,6 +9,7 @@ import com.dramix.app.data.source.local.ProviderPreferences
 import com.dramix.app.data.source.local.UserProviderConfig
 import com.dramix.app.domain.model.Category
 import com.dramix.app.domain.model.ProviderModel
+import com.dramix.app.domain.model.VideoFeedPage
 import com.dramix.app.domain.model.VideoItem
 import com.dramix.app.domain.repository.CatalogRepository
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -39,6 +40,9 @@ data class HomeUiState(
     val isLoading: Boolean = true,
     val isLoadingCategories: Boolean = false,
     val isLoadingContent: Boolean = false,
+    val isLoadingMore: Boolean = false,
+    val hasMoreContent: Boolean = false,
+    val currentPage: Int = 1,
     val errorMessage: String? = null,
     val isCustomizingProviders: Boolean = false
 )
@@ -83,20 +87,27 @@ class HomeViewModel(
             val effectiveProviders = providerPreferences.applyToProviders(rawProviders)
             val contentTypes = buildContentTypes(effectiveProviders)
 
-            val currentSelected = _uiState.value.selectedProviderId
-            val defaultProvider = if (effectiveProviders.any { it.id == currentSelected }) {
-                effectiveProviders.first { it.id == currentSelected }
-            } else {
-                effectiveProviders.firstOrNull()
-            }
+            // Restore last selection from preferences
+            val lastContentType = providerPreferences.getLastContentType()
+            val lastProviderId = providerPreferences.getLastProviderId()
+            val lastCategoryId = providerPreferences.getLastCategoryId()
 
-            val selectedContentType = defaultProvider?.contentType
-                ?: contentTypes.firstOrNull()?.id
+            val selectedContentType = if (lastContentType != null && contentTypes.any { it.id == lastContentType }) {
+                lastContentType
+            } else {
+                effectiveProviders.firstOrNull()?.contentType ?: contentTypes.firstOrNull()?.id
+            }
 
             val filteredProviders = if (selectedContentType != null) {
                 effectiveProviders.filter { it.contentType == selectedContentType }
             } else {
                 effectiveProviders
+            }
+
+            val defaultProvider = if (lastProviderId != null && filteredProviders.any { it.id == lastProviderId }) {
+                filteredProviders.first { it.id == lastProviderId }
+            } else {
+                filteredProviders.firstOrNull()
             }
 
             _uiState.value = _uiState.value.copy(
@@ -108,7 +119,7 @@ class HomeViewModel(
             )
 
             if (defaultProvider != null) {
-                loadProviderCategoriesAndFeed(defaultProvider.id, categoryId = null)
+                loadProviderCategoriesAndFeed(defaultProvider.id, categoryId = lastCategoryId)
             } else {
                 _uiState.value = _uiState.value.copy(isLoading = false)
             }
@@ -131,6 +142,12 @@ class HomeViewModel(
             spotlightItem = null,
             popularVideos = emptyList(),
             isLoadingContent = true
+        )
+
+        providerPreferences.saveLastSelection(
+            contentType = contentType,
+            providerId = newSelectedProvider,
+            categoryId = null
         )
 
         if (newSelectedProvider != null) {
@@ -165,6 +182,12 @@ class HomeViewModel(
             isLoadingContent = true
         )
 
+        providerPreferences.saveLastSelection(
+            contentType = contentType,
+            providerId = providerId,
+            categoryId = null
+        )
+
         viewModelScope.launch {
             loadProviderCategoriesAndFeed(providerId, categoryId = null)
         }
@@ -176,7 +199,14 @@ class HomeViewModel(
 
         _uiState.value = _uiState.value.copy(
             selectedCategoryId = categoryId,
+            categoryVideos = emptyList(),
             isLoadingContent = true
+        )
+
+        providerPreferences.saveLastSelection(
+            contentType = _uiState.value.selectedContentType,
+            providerId = providerId,
+            categoryId = categoryId
         )
 
         viewModelScope.launch {
@@ -289,12 +319,27 @@ class HomeViewModel(
         loadCategoryVideos(providerId, activeCategory)
     }
 
+    fun refreshCurrentCategory() {
+        val providerId = _uiState.value.selectedProviderId ?: return
+        val categoryId = _uiState.value.selectedCategoryId ?: return
+
+        _uiState.value = _uiState.value.copy(
+            categoryVideos = emptyList(),
+            isLoadingContent = true
+        )
+
+        viewModelScope.launch {
+            loadCategoryVideos(providerId, categoryId)
+        }
+    }
+
     private suspend fun loadCategoryVideos(providerId: String, categoryId: String) {
         _uiState.value = _uiState.value.copy(isLoadingContent = true, errorMessage = null)
-        val videosResult = catalogRepository.getVideos(providerId, categoryId, 1)
+        val feedResult = catalogRepository.getVideoFeed(providerId, categoryId, 1)
 
-        if (videosResult.isSuccess) {
-            val items = videosResult.getOrDefault(emptyList())
+        if (feedResult.isSuccess) {
+            val feed = feedResult.getOrDefault(VideoFeedPage())
+            val items = feed.items
             val spotlight = items.firstOrNull()
             val popular = if (items.isNotEmpty()) items.drop(1) else emptyList()
 
@@ -313,6 +358,8 @@ class HomeViewModel(
                 spotlightItem = spotlight,
                 popularVideos = popular,
                 shortDramaVideos = shortDramas,
+                currentPage = 1,
+                hasMoreContent = feed.hasMore,
                 isLoading = false,
                 isLoadingContent = false,
                 errorMessage = null
@@ -321,8 +368,42 @@ class HomeViewModel(
             _uiState.value = _uiState.value.copy(
                 isLoading = false,
                 isLoadingContent = false,
-                errorMessage = videosResult.exceptionOrNull()?.localizedMessage ?: "Gagal memuat katalog video"
+                errorMessage = feedResult.exceptionOrNull()?.localizedMessage ?: "Gagal memuat katalog video"
             )
+        }
+    }
+
+    fun loadMoreVideos() {
+        val currentState = _uiState.value
+        if (currentState.isLoadingMore || !currentState.hasMoreContent) return
+
+        val providerId = currentState.selectedProviderId ?: return
+        val categoryId = currentState.selectedCategoryId ?: return
+        val nextPage = currentState.currentPage + 1
+
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoadingMore = true)
+
+            val result = catalogRepository.getVideoFeed(providerId, categoryId, nextPage)
+            if (result.isSuccess) {
+                val latest = _uiState.value
+                if (latest.selectedProviderId != providerId ||
+                    latest.selectedCategoryId != categoryId
+                ) {
+                    _uiState.value = _uiState.value.copy(isLoadingMore = false)
+                    return@launch
+                }
+
+                val feed = result.getOrDefault(VideoFeedPage())
+                _uiState.value = _uiState.value.copy(
+                    categoryVideos = currentState.categoryVideos + feed.items,
+                    currentPage = nextPage,
+                    hasMoreContent = feed.hasMore,
+                    isLoadingMore = false
+                )
+            } else {
+                _uiState.value = _uiState.value.copy(isLoadingMore = false)
+            }
         }
     }
 

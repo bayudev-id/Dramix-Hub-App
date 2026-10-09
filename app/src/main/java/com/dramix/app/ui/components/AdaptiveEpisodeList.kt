@@ -47,6 +47,7 @@ import com.dramix.app.ui.theme.TagBadgeShape
 fun AdaptiveEpisodeList(
     episodes: List<Episode>,
     activeEpisodeNumber: Int,
+    activeEpisodeId: String? = null,
     onEpisodeClick: (Episode) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -62,7 +63,7 @@ fun AdaptiveEpisodeList(
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             items(episodes, key = { it.id }) { episode ->
-                val isActive = episode.number == activeEpisodeNumber
+                val isActive = if (activeEpisodeId != null) episode.id == activeEpisodeId else episode.number == activeEpisodeNumber
                 EpisodeThumbnailCard(
                     episode = episode,
                     isActive = isActive,
@@ -85,7 +86,7 @@ fun AdaptiveEpisodeList(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     rowEpisodes.forEach { episode ->
-                        val isActive = episode.number == activeEpisodeNumber
+                        val isActive = if (activeEpisodeId != null) episode.id == activeEpisodeId else episode.number == activeEpisodeNumber
                         Box(
                             modifier = Modifier
                                 .weight(1f)
@@ -107,7 +108,17 @@ fun AdaptiveEpisodeList(
                                 fontSize = 15.sp
                             )
 
-                            if (episode.isVip || episode.number >= 4) {
+                            if (episode.isSewa) {
+                                Icon(
+                                    imageVector = Icons.Default.Lock,
+                                    contentDescription = "Sewa",
+                                    tint = if (isActive) Color.White.copy(alpha = 0.8f) else CrimsonPlay,
+                                    modifier = Modifier
+                                        .size(12.dp)
+                                        .align(Alignment.TopEnd)
+                                        .padding(top = 4.dp, end = 4.dp)
+                                )
+                            } else if (episode.isVip || episode.number >= 4) {
                                 Icon(
                                     imageVector = Icons.Default.Lock,
                                     contentDescription = "VIP",
@@ -161,7 +172,9 @@ private fun EpisodeThumbnailCard(
                 modifier = Modifier.fillMaxSize()
             )
 
-            if (episode.isVip || episode.number >= 4) {
+            if (episode.isSewa) {
+                SewaBadge(modifier = Modifier.align(Alignment.TopEnd))
+            } else if (episode.isVip || episode.number >= 4) {
                 Box(
                     modifier = Modifier
                         .align(Alignment.TopEnd)

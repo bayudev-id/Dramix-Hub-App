@@ -14,6 +14,11 @@ data class Category(
     val name: String
 )
 
+data class VideoFeedPage(
+    val items: List<VideoItem> = emptyList(),
+    val hasMore: Boolean = false
+)
+
 data class VideoItem(
     val id: String,
     val title: String,
@@ -25,6 +30,29 @@ data class VideoItem(
     val views: String? = null,
     val isVip: Boolean = false,
     val tags: List<String> = emptyList()
+) {
+    val isSewa: Boolean
+        get() {
+            val isWetvSource = source == null || source.equals("wetv", ignoreCase = true)
+            if (!isWetvSource) return false
+            return tags.any { it.equals("sewa", ignoreCase = true) || it.equals("rent", ignoreCase = true) }
+        }
+}
+
+data class Dub(
+    val id: String,
+    val title: String,
+    val name: String = title,
+    val lanCode: String? = null,
+    val isOriginal: Boolean = false
+)
+
+data class CastMember(
+    val id: String = "",
+    val name: String = "",
+    val role: String? = null,
+    val cover: String? = null,
+    val isDirector: Boolean = false
 )
 
 data class DramaDetail(
@@ -40,8 +68,17 @@ data class DramaDetail(
     val isVip: Boolean = false,
     val tags: List<String> = emptyList(),
     val totalEpisodes: Int = 0,
-    val seasons: List<Season> = emptyList()
-)
+    val seasons: List<Season> = emptyList(),
+    val dubs: List<Dub> = emptyList(),
+    val cast: List<CastMember> = emptyList()
+) {
+    val isSewa: Boolean
+        get() {
+            val isWetvSource = source == null || source.equals("wetv", ignoreCase = true)
+            if (!isWetvSource) return false
+            return tags.any { it.equals("sewa", ignoreCase = true) || it.equals("rent", ignoreCase = true) }
+        }
+}
 
 data class Season(
     val name: String? = null,
@@ -61,7 +98,14 @@ data class Episode(
     val isTrailer: Boolean = false,
     val label: String? = null,
     val tags: List<String> = emptyList()
-)
+) {
+    val isSewa: Boolean
+        get() {
+            if (label?.equals("sewa", ignoreCase = true) == true) return true
+            if (label?.equals("rent", ignoreCase = true) == true) return true
+            return tags.any { it.equals("sewa", ignoreCase = true) || it.equals("rent", ignoreCase = true) }
+        }
+}
 
 data class PlaybackSource(
     val id: String,

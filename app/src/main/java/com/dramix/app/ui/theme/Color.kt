@@ -8,7 +8,7 @@ val MidnightBase = Color(0xFF0F0F23)
 val MidnightCard = Color(0xFF16162A)
 val MidnightBorder = Color(0xFF25253E)
 
-val CrimsonPlay = Color(0xFFE11D48)
+val CrimsonPlay = Color(0xFFEA020E)
 val CrimsonPressed = Color(0xFFBE123C)
 val GoldVip = Color(0xFFF59E0B)
 

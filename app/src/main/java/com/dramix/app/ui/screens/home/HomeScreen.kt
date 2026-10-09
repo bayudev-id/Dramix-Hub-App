@@ -34,6 +34,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -42,6 +43,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -60,7 +62,10 @@ import com.dramix.app.ui.components.CategoryChipsRow
 import com.dramix.app.ui.components.CategorySelectorSheet
 import com.dramix.app.ui.components.ContentTypeChipsRow
 import com.dramix.app.ui.components.ProviderCustomizerSheet
+import com.dramix.app.ui.components.SewaBadge
 import com.dramix.app.ui.components.ShimmerPlaceholder
+import com.dramix.app.ui.components.VipBadge
+import com.dramix.app.ui.components.animateToCentered
 import com.dramix.app.ui.theme.CrimsonPlay
 import com.dramix.app.ui.theme.MidnightBorder
 import com.dramix.app.ui.theme.MidnightCard
@@ -83,6 +88,26 @@ fun HomeScreen(
     val listState = rememberLazyListState()
 
     var showCategorySelectorSheet by remember { mutableStateOf(false) }
+    var isRefreshing by remember { mutableStateOf(false) }
+
+    LaunchedEffect(uiState.isLoading, uiState.isLoadingContent) {
+        if (!uiState.isLoading && !uiState.isLoadingContent) {
+            isRefreshing = false
+        }
+    }
+
+    // Infinite scroll trigger
+    LaunchedEffect(listState) {
+        snapshotFlow {
+            val lastVisibleIndex = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+            val totalItems = listState.layoutInfo.totalItemsCount
+            lastVisibleIndex to totalItems
+        }.collect { (lastVisible, total) ->
+            if (total > 0 && lastVisible >= total - 5 && uiState.hasMoreContent && !uiState.isLoadingMore) {
+                viewModel.loadMoreVideos()
+            }
+        }
+    }
 
     LaunchedEffect(uiState.selectedContentType, uiState.selectedProviderId, uiState.selectedCategoryId) {
         listState.scrollToItem(0)
@@ -120,8 +145,7 @@ fun HomeScreen(
                 ProviderChipsRow(
                     providers = uiState.filteredProviders,
                     selectedProviderId = uiState.selectedProviderId,
-                    onProviderSelected = { viewModel.selectProvider(it) },
-                    onCustomizeClick = { viewModel.openProviderCustomizer() }
+                    onProviderSelected = { viewModel.selectProvider(it) }
                 )
 
                 // LEVEL 3: Categories of Selected Provider
@@ -156,29 +180,20 @@ fun HomeScreen(
                 onRetry = { viewModel.loadInitialData() }
             )
         } else {
-            LazyColumn(
-                state = listState,
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(bottom = 24.dp)
+            PullToRefreshBox(
+                isRefreshing = isRefreshing,
+                onRefresh = {
+                    isRefreshing = true
+                    viewModel.refreshCurrentCategory()
+                },
+                modifier = Modifier.fillMaxSize()
             ) {
-                // Spotlight Hero Banner
-                uiState.spotlightItem?.let { spotlight ->
-                    item(key = "spotlight_banner") {
-                        val activeProviderId = uiState.selectedProviderId ?: "freereels"
-                        SpotlightBanner(
-                            item = spotlight,
-                            onPlayClick = {
-                                if (spotlight.type == "short_drama" || uiState.selectedContentType == "short_drama") {
-                                    onNavigateToShorts(activeProviderId, spotlight.id)
-                                } else {
-                                    onNavigateToVodPlayer(activeProviderId, spotlight.id)
-                                }
-                            }
-                        )
-                    }
-                }
-
-                // Continue Watching (Lanjutkan Menonton)
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(bottom = 24.dp)
+                ) {
+                    // Continue Watching (Lanjutkan Menonton)
                 if (continueWatching.isNotEmpty()) {
                     item(key = "continue_watching_section") {
                         ContinueWatchingSection(
@@ -270,8 +285,26 @@ fun HomeScreen(
                         }
                     }
                 }
+
+                if (uiState.isLoadingMore) {
+                    item(key = "loading_more_indicator") {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            LinearProgressIndicator(
+                                color = CrimsonPlay,
+                                trackColor = MidnightBorder,
+                                modifier = Modifier.fillMaxWidth(0.5f)
+                            )
+                        }
+                    }
+                }
             }
         }
+    }
 
         // Category Selector Bottom Sheet (for providers with many categories)
         if (showCategorySelectorSheet) {
@@ -362,60 +395,42 @@ private fun HomeTopBar(
 private fun ProviderChipsRow(
     providers: List<ProviderModel>,
     selectedProviderId: String?,
-    onProviderSelected: (String) -> Unit,
-    onCustomizeClick: () -> Unit
+    onProviderSelected: (String) -> Unit
 ) {
+    val listState = rememberLazyListState()
+
+    // Auto-scroll to selected provider (centered)
+    LaunchedEffect(selectedProviderId) {
+        selectedProviderId?.let { selected ->
+            val selectedIndex = providers.indexOfFirst { it.id == selected }
+            if (selectedIndex >= 0) {
+                listState.animateToCentered(selectedIndex)
+            }
+        }
+    }
+
     LazyRow(
+        state = listState,
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 2.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        item(key = "customize_chip") {
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(MidnightCard)
-                    .border(
-                        width = 1.dp,
-                        color = MidnightBorder,
-                        shape = RoundedCornerShape(20.dp)
-                    )
-                    .clickable { onCustomizeClick() }
-                    .padding(horizontal = 12.dp, vertical = 6.dp)
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Tune,
-                        contentDescription = "Kustomisasi Provider",
-                        tint = CrimsonPlay,
-                        modifier = Modifier.size(15.dp)
-                    )
-                    Text(
-                        text = "Atur",
-                        color = Slate50,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
-            }
-        }
-
         items(providers, key = { it.id }) { provider ->
             val isSelected = provider.id == selectedProviderId
             Box(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(if (isSelected) CrimsonPlay else MidnightCard)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(
+                        if (isSelected) CrimsonPlay.copy(alpha = 0.22f)
+                        else MidnightCard
+                    )
                     .border(
                         width = 1.dp,
-                        color = if (isSelected) CrimsonPlay else MidnightBorder,
-                        shape = RoundedCornerShape(20.dp)
+                        color = if (isSelected) CrimsonPlay else MidnightBorder.copy(alpha = 0.7f),
+                        shape = RoundedCornerShape(16.dp)
                     )
                     .clickable { onProviderSelected(provider.id) }
-                    .padding(horizontal = 12.dp, vertical = 6.dp)
+                    .padding(horizontal = 12.dp, vertical = 5.dp)
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -427,96 +442,18 @@ private fun ProviderChipsRow(
                             contentDescription = provider.name,
                             contentScale = ContentScale.Crop,
                             modifier = Modifier
-                                .size(16.dp)
+                                .size(14.dp)
                                 .clip(CircleShape)
                         )
                     }
 
                     Text(
                         text = provider.name,
-                        color = if (isSelected) Color.White else Slate400,
-                        fontSize = 13.sp,
+                        color = if (isSelected) CrimsonPlay else Slate400,
+                        fontSize = 12.sp,
                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
                     )
                 }
-            }
-        }
-    }
-}
-
-@Composable
-private fun SpotlightBanner(
-    item: VideoItem,
-    onPlayClick: () -> Unit
-) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 10.dp)
-            .aspectRatio(16f / 9f)
-            .clip(RoundedCornerShape(12.dp))
-            .clickable { onPlayClick() }
-    ) {
-        AsyncImage(
-            model = item.cover,
-            contentDescription = item.title,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier.fillMaxSize()
-        )
-
-        // Gradient overlay
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.9f)),
-                        startY = 100f
-                    )
-                )
-        )
-
-        Column(
-            modifier = Modifier
-                .align(Alignment.BottomStart)
-                .padding(16.dp)
-        ) {
-            Text(
-                text = item.title,
-                color = Color.White,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-
-            item.score?.let { score ->
-                if (score.isNotBlank() && score != "0") {
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "★ $score",
-                        color = Color(0xFFF59E0B),
-                        style = MaterialTheme.typography.labelSmall
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Button(
-                onClick = onPlayClick,
-                colors = ButtonDefaults.buttonColors(containerColor = CrimsonPlay),
-                shape = RoundedCornerShape(8.dp),
-                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.PlayArrow,
-                    contentDescription = null,
-                    tint = Color.White,
-                    modifier = Modifier.size(16.dp)
-                )
-                Spacer(modifier = Modifier.width(4.dp))
-                Text(text = "Putar Sekarang", color = Color.White, style = MaterialTheme.typography.labelLarge)
             }
         }
     }
@@ -628,22 +565,11 @@ private fun PosterCard2x3(
                 modifier = Modifier.fillMaxSize()
             )
 
-            if (item.isVip) {
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(4.dp)
-                        .clip(TagBadgeShape)
-                        .background(Color(0xFFF59E0B))
-                        .padding(horizontal = 6.dp, vertical = 2.dp)
-                ) {
-                    Text(
-                        text = "VIP",
-                        color = Color.Black,
-                        fontSize = 9.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
+            // Sewa Badge / VIP Badge (Kanan Atas)
+            if (item.isSewa) {
+                SewaBadge(modifier = Modifier.align(Alignment.TopEnd))
+            } else if (item.isVip) {
+                VipBadge(modifier = Modifier.align(Alignment.TopEnd))
             }
 
             item.score?.let { score ->
@@ -705,22 +631,11 @@ private fun PosterCard9x16(
                 modifier = Modifier.fillMaxSize()
             )
 
-            if (item.isVip) {
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(4.dp)
-                        .clip(TagBadgeShape)
-                        .background(Color(0xFFF59E0B))
-                        .padding(horizontal = 6.dp, vertical = 2.dp)
-                ) {
-                    Text(
-                        text = "VIP",
-                        color = Color.Black,
-                        fontSize = 9.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
+            // Sewa Badge / VIP Badge (Kanan Atas)
+            if (item.isSewa) {
+                SewaBadge(modifier = Modifier.align(Alignment.TopEnd))
+            } else if (item.isVip) {
+                VipBadge(modifier = Modifier.align(Alignment.TopEnd))
             }
         }
 
@@ -792,15 +707,56 @@ private fun EmptyCategoryState() {
 
 @Composable
 private fun HomeShimmerLoading() {
-    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-        ShimmerPlaceholder(
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(vertical = 4.dp)
+    ) {
+        // Content Type Chip Shimmer Row
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .aspectRatio(16f / 9f),
-            cornerRadius = 12.dp
-        )
-        Spacer(modifier = Modifier.height(24.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                .padding(horizontal = 16.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            ShimmerPlaceholder(modifier = Modifier.size(width = 110.dp, height = 28.dp), cornerRadius = 16.dp)
+            ShimmerPlaceholder(modifier = Modifier.size(width = 95.dp, height = 28.dp), cornerRadius = 16.dp)
+            ShimmerPlaceholder(modifier = Modifier.size(width = 85.dp, height = 28.dp), cornerRadius = 16.dp)
+        }
+
+        // Provider Chip Shimmer Row
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            ShimmerPlaceholder(modifier = Modifier.size(width = 90.dp, height = 28.dp), cornerRadius = 16.dp)
+            ShimmerPlaceholder(modifier = Modifier.size(width = 105.dp, height = 28.dp), cornerRadius = 16.dp)
+            ShimmerPlaceholder(modifier = Modifier.size(width = 80.dp, height = 28.dp), cornerRadius = 16.dp)
+        }
+
+        // Category Chip Shimmer Row
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            ShimmerPlaceholder(modifier = Modifier.size(width = 75.dp, height = 28.dp), cornerRadius = 16.dp)
+            ShimmerPlaceholder(modifier = Modifier.size(width = 85.dp, height = 28.dp), cornerRadius = 16.dp)
+            ShimmerPlaceholder(modifier = Modifier.size(width = 65.dp, height = 28.dp), cornerRadius = 16.dp)
+            ShimmerPlaceholder(modifier = Modifier.size(width = 70.dp, height = 28.dp), cornerRadius = 16.dp)
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
             repeat(3) {
                 ShimmerPlaceholder(
                     modifier = Modifier

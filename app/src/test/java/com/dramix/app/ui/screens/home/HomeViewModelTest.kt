@@ -10,6 +10,7 @@ import com.dramix.app.domain.model.Category
 import com.dramix.app.domain.model.DramaDetail
 import com.dramix.app.domain.model.PlaybackSource
 import com.dramix.app.domain.model.ProviderModel
+import com.dramix.app.domain.model.VideoFeedPage
 import com.dramix.app.domain.model.VideoItem
 import com.dramix.app.domain.repository.CatalogRepository
 import kotlinx.coroutines.Dispatchers
@@ -43,6 +44,7 @@ class HomeViewModelTest {
     private class FakeWatchHistoryDao : WatchHistoryDao {
         override suspend fun insertOrUpdateWatchHistory(history: WatchHistoryEntity): Long = 1L
         override suspend fun getEpisodeHistory(dramaId: String, providerId: String, episodeNumber: Int): WatchHistoryEntity? = null
+        override suspend fun getLatestWatchedEpisode(dramaId: String, providerId: String): WatchHistoryEntity? = null
         override fun getDramaHistory(dramaId: String, providerId: String): Flow<List<WatchHistoryEntity>> = flowOf(emptyList())
         override fun getLatestWatchedDramas(limit: Int): Flow<List<WatchHistoryEntity>> = flowOf(
             listOf(
@@ -78,6 +80,16 @@ class HomeViewModelTest {
             listOf(
                 VideoItem(id = "v-1", title = "Spotlight Drama", score = "9.5"),
                 VideoItem(id = "v-2", title = "Popular Drama 2", score = "8.8")
+            )
+        )
+
+        override suspend fun getVideoFeed(modelId: String, categoryId: String, page: Int): Result<VideoFeedPage> = Result.success(
+            VideoFeedPage(
+                items = listOf(
+                    VideoItem(id = "v-1", title = "Spotlight Drama", score = "9.5"),
+                    VideoItem(id = "v-2", title = "Popular Drama 2", score = "8.8")
+                ),
+                hasMore = false
             )
         )
 
@@ -118,10 +130,8 @@ class HomeViewModelTest {
         assertFalse(state.isLoading)
         assertEquals(3, state.providers.size)
         assertEquals("wetv", state.selectedProviderId)
-        assertNotNull(state.spotlightItem)
-        assertEquals("Spotlight Drama", state.spotlightItem?.title)
-        assertEquals(1, state.popularVideos.size)
-        assertEquals("Popular Drama 2", state.popularVideos[0].title)
+        assertEquals(2, state.categoryVideos.size)
+        assertFalse(state.hasMoreContent)
     }
 
     @Test

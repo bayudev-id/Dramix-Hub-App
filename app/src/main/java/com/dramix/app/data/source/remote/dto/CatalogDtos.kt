@@ -37,6 +37,7 @@ data class VideoFeedDataDto(
     @Json(name = "model_id") val modelId: String? = null,
     @Json(name = "category_id") val categoryId: String? = null,
     @Json(name = "page") val page: Int? = 1,
+    @Json(name = "has_more") val hasMore: Boolean? = false,
     @Json(name = "items") val items: List<VideoItemDto> = emptyList()
 )
 
@@ -68,7 +69,27 @@ data class DramaDetailDataDto(
     @Json(name = "is_vip") val isVip: Boolean = false,
     @Json(name = "tags") val tags: List<String> = emptyList(),
     @Json(name = "total_episodes") val totalEpisodes: Int = 0,
-    @Json(name = "seasons") val seasons: List<SeasonDto> = emptyList()
+    @Json(name = "seasons") val seasons: List<SeasonDto> = emptyList(),
+    @Json(name = "dubs") val dubs: List<DubDto>? = null,
+    @Json(name = "cast") val cast: List<CastMemberDto>? = emptyList()
+)
+
+@JsonClass(generateAdapter = true)
+data class CastMemberDto(
+    @Json(name = "id") val id: String? = null,
+    @Json(name = "name") val name: String? = null,
+    @Json(name = "role") val role: String? = null,
+    @Json(name = "cover") val cover: String? = null,
+    @Json(name = "is_director") val isDirector: Boolean? = false
+)
+
+@JsonClass(generateAdapter = true)
+data class DubDto(
+    @Json(name = "id") val id: String,
+    @Json(name = "name") val name: String? = null,
+    @Json(name = "title") val title: String? = null,
+    @Json(name = "lan_code") val lanCode: String? = null,
+    @Json(name = "is_original") val isOriginal: Boolean = false
 )
 
 @JsonClass(generateAdapter = true)

@@ -91,6 +91,7 @@ class ProfileViewModelTest {
 
         override suspend fun insertOrUpdateWatchHistory(history: WatchHistoryEntity): Long = 1L
         override suspend fun getEpisodeHistory(dramaId: String, providerId: String, episodeNumber: Int): WatchHistoryEntity? = null
+        override suspend fun getLatestWatchedEpisode(dramaId: String, providerId: String): WatchHistoryEntity? = null
         override fun getDramaHistory(dramaId: String, providerId: String): Flow<List<WatchHistoryEntity>> = list
         override fun getLatestWatchedDramas(limit: Int): Flow<List<WatchHistoryEntity>> = list
         override suspend fun deleteDramaHistory(dramaId: String, providerId: String): Int = 1

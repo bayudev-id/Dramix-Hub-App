@@ -15,6 +15,9 @@ interface WatchHistoryDao {
     @Query("SELECT * FROM watch_history WHERE drama_id = :dramaId AND provider_id = :providerId AND episode_number = :episodeNumber LIMIT 1")
     suspend fun getEpisodeHistory(dramaId: String, providerId: String, episodeNumber: Int): WatchHistoryEntity?
 
+    @Query("SELECT * FROM watch_history WHERE drama_id = :dramaId AND provider_id = :providerId ORDER BY updated_at DESC LIMIT 1")
+    suspend fun getLatestWatchedEpisode(dramaId: String, providerId: String): WatchHistoryEntity?
+
     @Query("SELECT * FROM watch_history WHERE drama_id = :dramaId AND provider_id = :providerId ORDER BY episode_number ASC")
     fun getDramaHistory(dramaId: String, providerId: String): Flow<List<WatchHistoryEntity>>
 

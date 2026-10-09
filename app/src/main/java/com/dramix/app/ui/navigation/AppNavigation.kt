@@ -51,11 +51,10 @@ fun AppNavigation(
 
     val mainTabs = listOf(
         Screen.Home.route,
-        Screen.Shorts.route,
-        Screen.LiveTv.route,
+        Screen.DownloadManager.route,
         Screen.Profile.route
     )
-    val shouldShowBottomBar = currentRoute in mainTabs || currentRoute?.startsWith("shorts") == true
+    val shouldShowBottomBar = currentRoute in mainTabs
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),

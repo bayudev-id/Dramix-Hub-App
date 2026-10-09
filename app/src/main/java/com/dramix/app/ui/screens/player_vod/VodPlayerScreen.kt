@@ -1,5 +1,8 @@
 package com.dramix.app.ui.screens.player_vod
 
+import android.app.Activity
+import android.content.pm.ActivityInfo
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -16,39 +19,61 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.DownloadDone
-import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Language
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
+import com.dramix.app.player.model.PlaybackState
 import com.dramix.app.ui.components.AdaptiveEpisodeList
 import com.dramix.app.ui.components.LicenseGateDialog
+import com.dramix.app.ui.components.RentalEpisodeGateDialog
 import com.dramix.app.ui.components.VideoPlayerSurface
+import coil.compose.AsyncImage
+import com.dramix.app.domain.model.CastMember
+import com.dramix.app.ui.components.SubtitleOverlay
+import com.dramix.app.ui.components.VodPlayerOverlay
 import com.dramix.app.ui.theme.CrimsonPlay
 import com.dramix.app.ui.theme.MidnightBorder
 import com.dramix.app.ui.theme.MidnightCard
@@ -57,6 +82,7 @@ import com.dramix.app.ui.theme.Slate400
 import com.dramix.app.ui.theme.Slate50
 import kotlinx.coroutines.launch
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun VodPlayerScreen(
     viewModel: VodPlayerViewModel,
@@ -65,7 +91,28 @@ fun VodPlayerScreen(
     modifier: Modifier = Modifier
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val playbackState by viewModel.playerController.playbackState.collectAsState()
+    val currentSubtitle by viewModel.currentSubtitleText.collectAsState()
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val activity = context as? Activity
+
+    var isFullscreen by remember { mutableStateOf(false) }
+    var isSettingsMenuOpen by remember { mutableStateOf(false) }
+
+    fun toggleFullscreen() {
+        val target = !isFullscreen
+        isFullscreen = target
+        activity?.requestedOrientation = if (target) {
+            ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+        } else {
+            ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+        }
+    }
+
+    BackHandler(enabled = isFullscreen) {
+        toggleFullscreen()
+    }
 
     LifecycleEventEffect(Lifecycle.Event.ON_PAUSE) {
         viewModel.pausePlayback()
@@ -75,9 +122,27 @@ fun VodPlayerScreen(
         viewModel.pausePlayback()
     }
 
-    // Autosave progress and pause when disposing/navigating back
+    LaunchedEffect(isFullscreen) {
+        activity?.window?.let { window ->
+            val insetsController = WindowCompat.getInsetsController(window, window.decorView)
+            if (isFullscreen) {
+                insetsController.systemBarsBehavior =
+                    WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                insetsController.hide(WindowInsetsCompat.Type.systemBars())
+            } else {
+                insetsController.show(WindowInsetsCompat.Type.systemBars())
+            }
+        }
+    }
+
+    // Autosave progress, restore orientation, restore system bars, and pause when disposing/navigating back
     DisposableEffect(Unit) {
         onDispose {
+            activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+            activity?.window?.let { window ->
+                val insetsController = WindowCompat.getInsetsController(window, window.decorView)
+                insetsController.show(WindowInsetsCompat.Type.systemBars())
+            }
             viewModel.pausePlayback()
             scope.launch {
                 viewModel.saveCurrentProgress()
@@ -85,60 +150,187 @@ fun VodPlayerScreen(
         }
     }
 
+    val isPlaying = when (val state = playbackState) {
+        is PlaybackState.Ready -> state.isPlaying
+        else -> viewModel.playerController.player.isPlaying
+    }
+
+    val currentPositionMs = when (val state = playbackState) {
+        is PlaybackState.Ready -> state.currentPositionMs
+        else -> {
+            val pos = viewModel.playerController.player.currentPosition.coerceAtLeast(0L)
+            if (pos > 0L) pos else uiState.initialPositionMs
+        }
+    }
+
+    val durationMs = when (val state = playbackState) {
+        is PlaybackState.Ready -> if (state.durationMs > 0L) state.durationMs else uiState.prefilledDurationMs
+        else -> {
+            val playerDuration = viewModel.playerController.player.duration.coerceAtLeast(0L)
+            if (playerDuration > 0L) playerDuration else uiState.prefilledDurationMs
+        }
+    }
+
+    val isBuffering = uiState.isLoadingPlayback || playbackState is PlaybackState.Buffering
+
+    val dramaTitle = uiState.detail?.title ?: "Dramix"
+    val episodeTitle = uiState.currentEpisode?.let { ep ->
+        ep.title?.takeIf { it.isNotBlank() } ?: "Episode ${ep.number}"
+    }
+
+    val hasPreviousEpisode = remember(uiState.detail, uiState.currentEpisode, uiState.currentSeasonIndex) {
+        viewModel.hasPreviousEpisode()
+    }
+    val hasNextEpisode = remember(uiState.detail, uiState.currentEpisode, uiState.currentSeasonIndex) {
+        viewModel.hasNextEpisode()
+    }
+
     Box(
         modifier = modifier
             .fillMaxSize()
             .background(PureBlack)
     ) {
-        Column(modifier = Modifier.fillMaxSize()) {
-            // Player Area (16:9 aspect ratio at the top)
+        if (isFullscreen) {
+            // Fullscreen Landscape Player Box
             Box(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(16f / 9f)
+                    .fillMaxSize()
+                    .background(Color.Black)
             ) {
                 VideoPlayerSurface(
                     player = viewModel.playerController.player,
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier.fillMaxSize(),
+                    useController = false,
+                    subtitleStyle = uiState.fullscreenSubtitleStyle,
+                    videoZoom = uiState.videoZoom
                 )
 
-                // Top Back Button Overlay
-                IconButton(
-                    onClick = onNavigateBack,
-                    modifier = Modifier
-                        .padding(8.dp)
-                        .size(40.dp)
-                        .clip(RoundedCornerShape(20.dp))
-                        .background(Color.Black.copy(alpha = 0.5f))
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Kembali",
-                        tint = Color.White
+                if (!uiState.selectedSubtitleId.equals("off", ignoreCase = true) && currentSubtitle != null) {
+                    SubtitleOverlay(
+                        text = currentSubtitle!!.text,
+                        style = uiState.fullscreenSubtitleStyle,
+                        modifier = Modifier.fillMaxSize()
                     )
                 }
 
-                // Playback Loading Overlay
-                if (uiState.isLoadingPlayback) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(Color.Black.copy(alpha = 0.6f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        CircularProgressIndicator(
-                            color = CrimsonPlay,
-                            modifier = Modifier.size(36.dp)
+                VodPlayerOverlay(
+                    dramaTitle = dramaTitle,
+                    episodeTitle = episodeTitle,
+                    isPlaying = isPlaying,
+                    isBuffering = isBuffering,
+                    currentPositionMs = currentPositionMs,
+                    durationMs = durationMs,
+                    isFullscreen = true,
+                    onNavigateBack = { toggleFullscreen() },
+                    onTogglePlayPause = { viewModel.playerController.togglePlayPause() },
+                    onSeekTo = { pos -> viewModel.playerController.seekTo(pos) },
+                    onSeekBy = { offset -> viewModel.playerController.seekBy(offset) },
+                    onToggleFullscreen = { toggleFullscreen() },
+                    isSettingsOpen = isSettingsMenuOpen,
+                    onOpenSettings = { isSettingsMenuOpen = true },
+                    onDismissSettings = { isSettingsMenuOpen = false },
+                    qualities = uiState.availableQualities,
+                    selectedQuality = uiState.selectedQuality,
+                    onSelectQuality = { q -> viewModel.selectQuality(q) },
+                    subtitles = uiState.availableSubtitles,
+                    selectedSubtitleId = uiState.selectedSubtitleId,
+                    onSelectSubtitle = { sId -> viewModel.selectSubtitle(sId) },
+                    playbackSpeed = uiState.playbackSpeed,
+                    onSelectSpeed = { speed -> viewModel.setPlaybackSpeed(speed) },
+                    isAutoNext = uiState.isAutoNext,
+                    onToggleAutoNext = { enabled -> viewModel.toggleAutoNext(enabled) },
+                    hasPreviousEpisode = hasPreviousEpisode,
+                    hasNextEpisode = hasNextEpisode,
+                    onPlayPreviousEpisode = { viewModel.playPreviousEpisode() },
+                    onPlayNextEpisode = { viewModel.playNextEpisode() },
+                    videoZoom = uiState.videoZoom,
+                    onUpdateZoom = { delta -> viewModel.updateVideoZoom(delta) },
+                    subtitleStyle = uiState.fullscreenSubtitleStyle,
+                    onSelectFontFamily = { f -> viewModel.selectSubtitleFontFamily(f, isFullscreen = true) },
+                    onSelectOutlineStyle = { o -> viewModel.selectSubtitleOutlineStyle(o, isFullscreen = true) },
+                    onUpdateFontSize = { delta -> viewModel.updateSubtitleFontSize(delta, isFullscreen = true) },
+                    onUpdatePosition = { delta -> viewModel.updateSubtitlePosition(delta, isFullscreen = true) },
+                    onUpdateBgOpacity = { delta -> viewModel.updateSubtitleBgOpacity(delta, isFullscreen = true) },
+                    onSetBgOpacity = { opacity -> viewModel.setSubtitleBgOpacity(opacity, isFullscreen = true) },
+                    onUpdateTextColor = { color -> viewModel.updateSubtitleTextColor(color, isFullscreen = true) },
+                    onUpdateBgColor = { color -> viewModel.updateSubtitleBgColor(color, isFullscreen = true) }
+                )
+            }
+        } else {
+            Column(modifier = Modifier.fillMaxSize()) {
+                // Player Area (16:9 aspect ratio at the top)
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(16f / 9f)
+                        .clipToBounds()
+                        .background(Color.Black)
+                ) {
+                    VideoPlayerSurface(
+                        player = viewModel.playerController.player,
+                        modifier = Modifier.fillMaxSize(),
+                        useController = false,
+                        subtitleStyle = uiState.portraitSubtitleStyle,
+                        videoZoom = uiState.videoZoom
+                    )
+
+                    if (!uiState.selectedSubtitleId.equals("off", ignoreCase = true) && currentSubtitle != null) {
+                        SubtitleOverlay(
+                            text = currentSubtitle!!.text,
+                            style = uiState.portraitSubtitleStyle,
+                            modifier = Modifier.fillMaxSize()
                         )
                     }
-                }
-            }
 
-            // Scrollable Content & Metadata Area
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(bottom = 32.dp)
-            ) {
+                    VodPlayerOverlay(
+                        dramaTitle = dramaTitle,
+                        episodeTitle = episodeTitle,
+                        isPlaying = isPlaying,
+                        isBuffering = isBuffering,
+                        currentPositionMs = currentPositionMs,
+                        durationMs = durationMs,
+                        isFullscreen = false,
+                        onNavigateBack = onNavigateBack,
+                        onTogglePlayPause = { viewModel.playerController.togglePlayPause() },
+                        onSeekTo = { pos -> viewModel.playerController.seekTo(pos) },
+                        onSeekBy = { offset -> viewModel.playerController.seekBy(offset) },
+                        onToggleFullscreen = { toggleFullscreen() },
+                        isSettingsOpen = isSettingsMenuOpen,
+                        onOpenSettings = { isSettingsMenuOpen = true },
+                        onDismissSettings = { isSettingsMenuOpen = false },
+                        qualities = uiState.availableQualities,
+                        selectedQuality = uiState.selectedQuality,
+                        onSelectQuality = { q -> viewModel.selectQuality(q) },
+                        subtitles = uiState.availableSubtitles,
+                        selectedSubtitleId = uiState.selectedSubtitleId,
+                        onSelectSubtitle = { sId -> viewModel.selectSubtitle(sId) },
+                        playbackSpeed = uiState.playbackSpeed,
+                        onSelectSpeed = { speed -> viewModel.setPlaybackSpeed(speed) },
+                        isAutoNext = uiState.isAutoNext,
+                        onToggleAutoNext = { enabled -> viewModel.toggleAutoNext(enabled) },
+                        hasPreviousEpisode = hasPreviousEpisode,
+                        hasNextEpisode = hasNextEpisode,
+                        onPlayPreviousEpisode = { viewModel.playPreviousEpisode() },
+                        onPlayNextEpisode = { viewModel.playNextEpisode() },
+                        videoZoom = uiState.videoZoom,
+                        onUpdateZoom = { delta -> viewModel.updateVideoZoom(delta) },
+                        subtitleStyle = uiState.portraitSubtitleStyle,
+                        onSelectFontFamily = { f -> viewModel.selectSubtitleFontFamily(f, isFullscreen = false) },
+                        onSelectOutlineStyle = { o -> viewModel.selectSubtitleOutlineStyle(o, isFullscreen = false) },
+                        onUpdateFontSize = { delta -> viewModel.updateSubtitleFontSize(delta, isFullscreen = false) },
+                        onUpdatePosition = { delta -> viewModel.updateSubtitlePosition(delta, isFullscreen = false) },
+                        onUpdateBgOpacity = { delta -> viewModel.updateSubtitleBgOpacity(delta, isFullscreen = false) },
+                        onSetBgOpacity = { opacity -> viewModel.setSubtitleBgOpacity(opacity, isFullscreen = false) },
+                        onUpdateTextColor = { color -> viewModel.updateSubtitleTextColor(color, isFullscreen = false) },
+                        onUpdateBgColor = { color -> viewModel.updateSubtitleBgColor(color, isFullscreen = false) }
+                    )
+                }
+
+                // Scrollable Content & Metadata Area
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(bottom = 32.dp)
+                ) {
                 uiState.detail?.let { detail ->
                     item {
                         Column(modifier = Modifier.padding(16.dp)) {
@@ -285,6 +477,12 @@ fun VodPlayerScreen(
                                     )
                                 }
                             }
+
+                            // Cast section (actors & directors)
+                            if (detail.cast.isNotEmpty()) {
+                                Spacer(modifier = Modifier.height(20.dp))
+                                CastSection(cast = detail.cast)
+                            }
                         }
                     }
 
@@ -319,6 +517,13 @@ fun VodPlayerScreen(
 
                     // Episode List Section
                     item {
+                        var isDubMenuExpanded by remember { mutableStateOf(false) }
+                        val dubs = detail.dubs
+                        val activeDub = dubs.find { it.id == uiState.selectedDubId }
+                            ?: dubs.find { it.id == detail.id || detail.id.contains(it.id) || it.id.contains(detail.id) }
+                            ?: dubs.firstOrNull { it.isOriginal }
+                            ?: dubs.firstOrNull()
+
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -332,24 +537,67 @@ fun VodPlayerScreen(
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold
                             )
-                            
-                            if (uiState.isRefreshing) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(20.dp),
-                                    color = CrimsonPlay,
-                                    strokeWidth = 2.dp
-                                )
-                            } else {
-                                IconButton(
-                                    onClick = { viewModel.refreshCurrentEpisode() },
-                                    modifier = Modifier.size(32.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Refresh,
-                                        contentDescription = "Refresh Episode",
-                                        tint = CrimsonPlay,
-                                        modifier = Modifier.size(20.dp)
-                                    )
+
+                            if (dubs.isNotEmpty()) {
+                                Box {
+                                    Row(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(MidnightCard)
+                                            .border(1.dp, MidnightBorder, RoundedCornerShape(8.dp))
+                                            .clickable { isDubMenuExpanded = true }
+                                            .padding(horizontal = 10.dp, vertical = 6.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Language,
+                                            contentDescription = "Dubbing",
+                                            tint = CrimsonPlay,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Text(
+                                            text = activeDub?.title ?: "Pilih Dub",
+                                            color = Slate50,
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Medium,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            modifier = Modifier.widthIn(max = 140.dp)
+                                        )
+                                        Icon(
+                                            imageVector = Icons.Default.ArrowDropDown,
+                                            contentDescription = null,
+                                            tint = Slate400,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+
+                                    DropdownMenu(
+                                        expanded = isDubMenuExpanded,
+                                        onDismissRequest = { isDubMenuExpanded = false },
+                                        modifier = Modifier.background(MidnightCard)
+                                    ) {
+                                        dubs.forEach { dub ->
+                                            val isSelected = dub.id == activeDub?.id
+                                            DropdownMenuItem(
+                                                text = {
+                                                    Text(
+                                                        text = dub.title,
+                                                        color = if (isSelected) CrimsonPlay else Slate50,
+                                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                                        fontSize = 13.sp
+                                                    )
+                                                },
+                                                onClick = {
+                                                    isDubMenuExpanded = false
+                                                    if (!isSelected) {
+                                                        viewModel.selectDub(dub)
+                                                    }
+                                                }
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -361,6 +609,7 @@ fun VodPlayerScreen(
                         AdaptiveEpisodeList(
                             episodes = episodes,
                             activeEpisodeNumber = uiState.currentEpisode?.number ?: 1,
+                            activeEpisodeId = uiState.currentEpisode?.id,
                             onEpisodeClick = { episode ->
                                 viewModel.playEpisode(episode)
                             }
@@ -369,19 +618,132 @@ fun VodPlayerScreen(
                 }
             }
         }
+    }
 
-        // License Gate Dialog
-        if (uiState.showLicenseGate) {
-            LicenseGateDialog(
-                episodeNumber = uiState.lockedEpisodeNumber,
-                onActivateClick = {
-                    viewModel.dismissLicenseGate()
-                    onNavigateToProfile()
-                },
-                onDismiss = {
-                    viewModel.dismissLicenseGate()
-                }
+    // License Gate Dialog
+    if (uiState.showLicenseGate) {
+        LicenseGateDialog(
+            episodeNumber = uiState.lockedEpisodeNumber,
+            onActivateClick = {
+                viewModel.dismissLicenseGate()
+                onNavigateToProfile()
+            },
+            onDismiss = {
+                viewModel.dismissLicenseGate()
+            }
+        )
+    }
+
+    // Rental Gate Dialog for Episode Sewa
+    uiState.rentalBlockedEpisode?.let { blockedEp ->
+        RentalEpisodeGateDialog(
+            episodeTitle = blockedEp.title,
+            episodeNumber = blockedEp.number,
+            onDismiss = {
+                viewModel.dismissRentalGate()
+            }
+        )
+    }
+}
+}
+
+@Composable
+private fun CastSection(cast: List<CastMember>) {
+    val hasDirector = cast.any { it.isDirector }
+    Column(Modifier.fillMaxWidth()) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                text = if (hasDirector) "Pemeran & Kru" else "Pemeran",
+                color = Slate50,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                text = "(${cast.size})",
+                color = Slate400,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Medium
             )
         }
+        Spacer(modifier = Modifier.height(12.dp))
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            items(cast) { member ->
+                CastMemberItem(member)
+            }
+        }
+    }
+}
+
+@Composable
+private fun CastMemberItem(member: CastMember) {
+    Column(
+        modifier = Modifier.width(76.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        val initials = remember(member.name) {
+            member.name.trim().split(Regex("\\s+"))
+                .take(2)
+                .mapNotNull { it.firstOrNull()?.toString() }
+                .joinToString("")
+                .uppercase()
+        }
+        Box(
+            modifier = Modifier
+                .size(56.dp)
+                .clip(CircleShape)
+                .background(MidnightCard)
+                .border(1.dp, MidnightBorder, CircleShape)
+        ) {
+            val cover = member.cover
+            if (!cover.isNullOrBlank()) {
+                AsyncImage(
+                    model = cover,
+                    contentDescription = member.name,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else if (initials.isNotEmpty()) {
+                Text(
+                    text = initials,
+                    color = Slate400,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 18.sp,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.align(Alignment.Center)
+                )
+            }
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = member.name,
+            color = Slate50,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Medium,
+            lineHeight = 15.sp,
+            textAlign = TextAlign.Center,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.fillMaxWidth()
+        )
+        Spacer(modifier = Modifier.height(2.dp))
+        Text(
+            text = when {
+                member.isDirector -> "Sutradara"
+                !member.role.isNullOrBlank() -> member.role
+                else -> "Pemeran"
+            },
+            color = if (member.isDirector) CrimsonPlay else Slate400,
+            fontSize = 10.sp,
+            fontWeight = FontWeight.SemiBold,
+            textAlign = TextAlign.Center,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.fillMaxWidth()
+        )
     }
 }

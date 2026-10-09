@@ -12,12 +12,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -60,7 +62,20 @@ fun CategoryChipsRow(
 
     if (categories.isEmpty()) return
 
+    val listState = rememberLazyListState()
+
+    // Auto-scroll to selected category (centered)
+    LaunchedEffect(selectedCategoryId) {
+        selectedCategoryId?.let { selected ->
+            val selectedIndex = categories.indexOfFirst { it.id == selected }
+            if (selectedIndex >= 0) {
+                listState.animateToCentered(selectedIndex)
+            }
+        }
+    }
+
     LazyRow(
+        state = listState,
         modifier = modifier.fillMaxWidth(),
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 2.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp)

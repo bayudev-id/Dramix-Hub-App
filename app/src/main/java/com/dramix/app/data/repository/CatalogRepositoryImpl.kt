@@ -1,8 +1,10 @@
 package com.dramix.app.data.repository
 
 import com.dramix.app.data.source.remote.GatewayApiService
+import com.dramix.app.data.source.remote.dto.CastMemberDto
 import com.dramix.app.data.source.remote.dto.CategoryDto
 import com.dramix.app.data.source.remote.dto.DramaDetailDataDto
+import com.dramix.app.data.source.remote.dto.DubDto
 import com.dramix.app.data.source.remote.dto.EpisodeDto
 import com.dramix.app.data.source.remote.dto.PlaybackSourceDataDto
 import com.dramix.app.data.source.remote.dto.ProviderModelDto
@@ -10,14 +12,17 @@ import com.dramix.app.data.source.remote.dto.SeasonDto
 import com.dramix.app.data.source.remote.dto.StreamDto
 import com.dramix.app.data.source.remote.dto.SubtitleDto
 import com.dramix.app.data.source.remote.dto.VideoItemDto
+import com.dramix.app.domain.model.CastMember
 import com.dramix.app.domain.model.Category
 import com.dramix.app.domain.model.DramaDetail
+import com.dramix.app.domain.model.Dub
 import com.dramix.app.domain.model.Episode
 import com.dramix.app.domain.model.PlaybackSource
 import com.dramix.app.domain.model.ProviderModel
 import com.dramix.app.domain.model.Season
 import com.dramix.app.domain.model.StreamSource
 import com.dramix.app.domain.model.Subtitle
+import com.dramix.app.domain.model.VideoFeedPage
 import com.dramix.app.domain.model.VideoItem
 import com.dramix.app.domain.repository.CatalogRepository
 
@@ -42,6 +47,18 @@ class CatalogRepositoryImpl(
     ): Result<List<VideoItem>> = runCatching {
         val response = apiService.getVideos(modelId, categoryId, page)
         (response.data?.items ?: emptyList()).map { it.toDomain() }
+    }
+
+    override suspend fun getVideoFeed(
+        modelId: String,
+        categoryId: String,
+        page: Int
+    ): Result<VideoFeedPage> = runCatching {
+        val response = apiService.getVideos(modelId, categoryId, page)
+        val data = response.data
+        val items = (data?.items ?: emptyList()).map { it.toDomain() }
+        val hasMore = data?.hasMore ?: false
+        VideoFeedPage(items = items, hasMore = hasMore)
     }
 
     override suspend fun getDramaDetail(modelId: String, id: String): Result<DramaDetail> = runCatching {
@@ -110,7 +127,25 @@ class CatalogRepositoryImpl(
         isVip = isVip,
         tags = tags ?: emptyList(),
         totalEpisodes = totalEpisodes,
-        seasons = seasons?.map { it.toDomain() } ?: emptyList()
+        seasons = seasons?.map { it.toDomain() } ?: emptyList(),
+        dubs = dubs?.map { it.toDomain() } ?: emptyList(),
+        cast = cast?.map { it.toDomain() } ?: emptyList()
+    )
+
+    private fun DubDto.toDomain() = Dub(
+        id = id,
+        title = title ?: name.orEmpty(),
+        name = name ?: title.orEmpty(),
+        lanCode = lanCode,
+        isOriginal = isOriginal
+    )
+
+    private fun CastMemberDto.toDomain() = CastMember(
+        id = id.orEmpty(),
+        name = name.orEmpty(),
+        role = role,
+        cover = cover,
+        isDirector = isDirector ?: false
     )
 
     private fun SeasonDto.toDomain() = Season(

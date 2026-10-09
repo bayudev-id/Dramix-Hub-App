@@ -545,8 +545,8 @@ private fun SubtitleStyleSubMenuContent(
         StepperSettingRow(
             label = "Background Padding",
             valueText = "${subtitleStyle.backgroundPaddingPx}px",
-            onDecrement = { onUpdateBgPadding(-2) },
-            onIncrement = { onUpdateBgPadding(2) },
+            onDecrement = { onUpdateBgPadding(-1) },
+            onIncrement = { onUpdateBgPadding(1) },
             canDecrement = subtitleStyle.backgroundPaddingPx > 8,
             canIncrement = subtitleStyle.backgroundPaddingPx < 48
         )

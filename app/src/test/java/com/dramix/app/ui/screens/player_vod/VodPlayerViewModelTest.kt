@@ -108,6 +108,12 @@ class VodPlayerViewModelTest {
             return records["${dramaId}_${providerId}_$episodeNumber"]
         }
 
+        override suspend fun getLatestWatchedEpisode(dramaId: String, providerId: String): WatchHistoryEntity? {
+            return records.values
+                .filter { it.dramaId == dramaId && it.providerId == providerId }
+                .maxByOrNull { it.updatedAt }
+        }
+
         override fun getDramaHistory(dramaId: String, providerId: String): Flow<List<WatchHistoryEntity>> {
             return flowOf(records.values.toList())
         }

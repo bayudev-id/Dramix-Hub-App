@@ -10,6 +10,6 @@ class ThemeTest {
     @Test
     fun verify_oled_cinema_color_tokens() {
         assertEquals(Color(0xFF000000), PureBlack)
-        assertEquals(Color(0xFFE11D48), CrimsonPlay)
+        assertEquals(Color(0xFFEA020E), CrimsonPlay)
     }
 }

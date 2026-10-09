@@ -117,6 +117,12 @@ class ShortsPlayerViewModelTest {
             return records["${dramaId}_${providerId}_$episodeNumber"]
         }
 
+        override suspend fun getLatestWatchedEpisode(dramaId: String, providerId: String): WatchHistoryEntity? {
+            return records.values
+                .filter { it.dramaId == dramaId && it.providerId == providerId }
+                .maxByOrNull { it.updatedAt }
+        }
+
         override fun getDramaHistory(dramaId: String, providerId: String): Flow<List<WatchHistoryEntity>> = flowOf(emptyList())
         override fun getLatestWatchedDramas(limit: Int): Flow<List<WatchHistoryEntity>> = flowOf(emptyList())
         override suspend fun deleteDramaHistory(dramaId: String, providerId: String): Int = 1

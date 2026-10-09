@@ -4,10 +4,9 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.PlayCircleOutline
-import androidx.compose.material.icons.filled.Tv
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Icon
@@ -45,16 +44,10 @@ val BottomNavItems = listOf(
         destinationRoute = Screen.Home.route
     ),
     BottomNavItem(
-        title = "Drama Pendek",
-        icon = Icons.Default.PlayCircleOutline,
-        route = Screen.Shorts.createRoute(),
-        destinationRoute = Screen.Shorts.route
-    ),
-    BottomNavItem(
-        title = "Live TV",
-        icon = Icons.Default.Tv,
-        route = Screen.LiveTv.route,
-        destinationRoute = Screen.LiveTv.route
+        title = "Unduhan",
+        icon = Icons.Default.Download,
+        route = Screen.DownloadManager.route,
+        destinationRoute = Screen.DownloadManager.route
     ),
     BottomNavItem(
         title = "Saya",

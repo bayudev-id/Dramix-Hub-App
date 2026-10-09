@@ -310,23 +310,11 @@ private fun SearchVideoCard(
                 modifier = Modifier.fillMaxSize()
             )
 
-            // VIP Badge
-            if (item.isVip) {
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(4.dp)
-                        .clip(TagBadgeShape)
-                        .background(Color(0xFFF59E0B))
-                        .padding(horizontal = 5.dp, vertical = 2.dp)
-                ) {
-                    Text(
-                        text = "VIP",
-                        color = Color.Black,
-                        fontSize = 9.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
+            // Sewa Badge / VIP Badge (Kanan Atas)
+            if (item.isSewa) {
+                SewaBadge(modifier = Modifier.align(Alignment.TopEnd))
+            } else if (item.isVip) {
+                VipBadge(modifier = Modifier.align(Alignment.TopEnd))
             }
 
             // Score badge if available

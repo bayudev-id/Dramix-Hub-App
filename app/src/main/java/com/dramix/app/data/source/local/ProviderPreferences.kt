@@ -134,8 +134,30 @@ class ProviderPreferences(private val context: Context) {
         return result
     }
 
+    fun saveLastSelection(
+        contentType: String?,
+        providerId: String?,
+        categoryId: String?
+    ) {
+        prefs.edit().apply {
+            putString(KEY_LAST_CONTENT_TYPE, contentType)
+            putString(KEY_LAST_PROVIDER_ID, providerId)
+            putString(KEY_LAST_CATEGORY_ID, categoryId)
+            apply()
+        }
+    }
+
+    fun getLastContentType(): String? = prefs.getString(KEY_LAST_CONTENT_TYPE, null)
+
+    fun getLastProviderId(): String? = prefs.getString(KEY_LAST_PROVIDER_ID, null)
+
+    fun getLastCategoryId(): String? = prefs.getString(KEY_LAST_CATEGORY_ID, null)
+
     companion object {
         private const val PREFS_NAME = "dramix_provider_prefs"
         private const val KEY_CONFIGS = "user_provider_configs"
+        private const val KEY_LAST_CONTENT_TYPE = "last_selected_content_type"
+        private const val KEY_LAST_PROVIDER_ID = "last_selected_provider_id"
+        private const val KEY_LAST_CATEGORY_ID = "last_selected_category_id"
     }
 }
