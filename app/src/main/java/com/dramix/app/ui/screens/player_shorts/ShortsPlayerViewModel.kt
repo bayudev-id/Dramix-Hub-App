@@ -23,6 +23,7 @@ import kotlinx.coroutines.launch
 
 data class ShortsUiState(
     val isLoading: Boolean = true,
+    val isRefreshing: Boolean = false,
     val providerId: String = "freereels",
     val dramaId: String = "",
     val detail: DramaDetail? = null,
@@ -33,6 +34,7 @@ data class ShortsUiState(
     val showDetailSheet: Boolean = false,
     val showLicenseGate: Boolean = false,
     val lockedEpisodeNumber: Int = 1,
+    val rentalBlockedEpisode: Episode? = null,
     val errorMessage: String? = null
 )
 
@@ -146,15 +148,43 @@ class ShortsPlayerViewModel(
         if (index !in episodes.indices) return
 
         val targetEpisode = episodes[index]
-        val access = entitlementManager.canPlayEpisode(targetEpisode.number, targetEpisode.isVip)
+        if (!targetEpisode.isSewa) {
+            val access = entitlementManager.canPlayEpisode(targetEpisode.number, targetEpisode.isVip)
+            if (access is PlaybackAccess.AccessDenied) {
+                playerController.pause()
+                _uiState.value = _uiState.value.copy(
+                    showLicenseGate = true,
+                    lockedEpisodeNumber = targetEpisode.number
+                )
+                return
+            }
+        }
 
-        if (access is PlaybackAccess.AccessDenied) {
-            playerController.pause()
-            _uiState.value = _uiState.value.copy(
-                showLicenseGate = true,
-                lockedEpisodeNumber = targetEpisode.number
-            )
-            return
+        // Save progress for previous episode before switching index
+        val previousIndex = _uiState.value.currentEpisodeIndex
+        if (previousIndex in episodes.indices && previousIndex != index) {
+            val prevEp = episodes[previousIndex]
+            val detail = _uiState.value.detail
+            val player = playerController.player
+            val positionMs = player.currentPosition.coerceAtLeast(0L)
+            val durationMs = player.duration.coerceAtLeast(0L)
+            if (detail != null && durationMs > 0L && positionMs > 0L) {
+                viewModelScope.launch {
+                    val history = WatchHistoryEntity(
+                        dramaId = _uiState.value.dramaId,
+                        providerId = _uiState.value.providerId,
+                        dramaTitle = detail.title,
+                        dramaPoster = detail.cover,
+                        episodeNumber = prevEp.number,
+                        episodeTitle = prevEp.title,
+                        positionMs = positionMs,
+                        durationMs = durationMs,
+                        isCompleted = positionMs >= (durationMs * 0.95),
+                        updatedAt = System.currentTimeMillis()
+                    )
+                    watchHistoryDao.insertOrUpdateWatchHistory(history)
+                }
+            }
         }
 
         _uiState.value = _uiState.value.copy(
@@ -165,8 +195,6 @@ class ShortsPlayerViewModel(
         )
 
         viewModelScope.launch {
-            saveCurrentProgress()
-
             val sourceResult = catalogRepository.getPlaybackSource(
                 modelId = _uiState.value.providerId,
                 episodeId = targetEpisode.id,
@@ -189,15 +217,125 @@ class ShortsPlayerViewModel(
                         autoPlay = true
                     )
 
-                    _uiState.value = _uiState.value.copy(currentPlaybackSource = source)
+                    _uiState.value = _uiState.value.copy(
+                        currentPlaybackSource = source,
+                        rentalBlockedEpisode = null,
+                        errorMessage = null
+                    )
 
                     // Pre-buffer next episode (n+1)
                     prebufferNextEpisode(index + 1)
+                } else {
+                    // Stream kosong / tidak ada URL stream
+                    if (targetEpisode.isSewa) {
+                        playerController.pause()
+                        _uiState.value = _uiState.value.copy(
+                            rentalBlockedEpisode = targetEpisode,
+                            errorMessage = null
+                        )
+                    } else {
+                        _uiState.value = _uiState.value.copy(
+                            errorMessage = "Tidak ada stream video yang tersedia untuk episode ini"
+                        )
+                    }
                 }
             } else {
-                _uiState.value = _uiState.value.copy(
-                    errorMessage = sourceResult.exceptionOrNull()?.localizedMessage ?: "Gagal memuat stream"
-                )
+                if (targetEpisode.isSewa) {
+                    playerController.pause()
+                    _uiState.value = _uiState.value.copy(
+                        rentalBlockedEpisode = targetEpisode,
+                        errorMessage = null
+                    )
+                } else {
+                    _uiState.value = _uiState.value.copy(
+                        errorMessage = sourceResult.exceptionOrNull()?.localizedMessage ?: "Gagal memuat stream"
+                    )
+                }
+            }
+        }
+    }
+
+    fun dismissRentalGate() {
+        _uiState.value = _uiState.value.copy(rentalBlockedEpisode = null)
+    }
+
+    fun dismissErrorMessage() {
+        _uiState.value = _uiState.value.copy(errorMessage = null)
+    }
+
+    fun refreshCurrentEpisode() {
+        val index = _uiState.value.currentEpisodeIndex
+        val episodes = _uiState.value.episodes
+        if (index !in episodes.indices) return
+        if (_uiState.value.isRefreshing) return
+
+        val targetEpisode = episodes[index]
+        _uiState.value = _uiState.value.copy(
+            isRefreshing = true,
+            errorMessage = null,
+            rentalBlockedEpisode = null
+        )
+
+        viewModelScope.launch {
+            val sourceResult = catalogRepository.getPlaybackSource(
+                modelId = _uiState.value.providerId,
+                episodeId = targetEpisode.id,
+                id = _uiState.value.dramaId
+            )
+
+            if (sourceResult.isSuccess) {
+                val source = sourceResult.getOrThrow()
+                val stream = source.streams.firstOrNull()
+                if (stream != null) {
+                    val headers = HashMap<String, String>().apply {
+                        putAll(source.headers)
+                        putAll(stream.headers)
+                    }
+
+                    playerController.prepare(
+                        streamUrl = stream.url,
+                        headers = headers,
+                        startPositionMs = 0L,
+                        autoPlay = true
+                    )
+
+                    _uiState.value = _uiState.value.copy(
+                        currentPlaybackSource = source,
+                        rentalBlockedEpisode = null,
+                        errorMessage = null,
+                        isRefreshing = false
+                    )
+
+                    prebufferNextEpisode(index + 1)
+                } else {
+                    if (targetEpisode.isSewa) {
+                        playerController.pause()
+                        _uiState.value = _uiState.value.copy(
+                            rentalBlockedEpisode = targetEpisode,
+                            errorMessage = null,
+                            isRefreshing = false
+                        )
+                    } else {
+                        _uiState.value = _uiState.value.copy(
+                            errorMessage = "Tidak ada stream video yang tersedia untuk episode ini",
+                            isRefreshing = false
+                        )
+                    }
+                }
+            } else {
+                if (targetEpisode.isSewa) {
+                    playerController.pause()
+                    _uiState.value = _uiState.value.copy(
+                        rentalBlockedEpisode = targetEpisode,
+                        errorMessage = null,
+                        isRefreshing = false
+                    )
+                } else {
+                    _uiState.value = _uiState.value.copy(
+                        errorMessage = sourceResult.exceptionOrNull()?.localizedMessage ?: "Gagal memuat stream",
+                        isRefreshing = false
+                    )
+                }
             }
         }
     }

@@ -55,7 +55,10 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import com.dramix.app.ui.components.LicenseGateDialog
+import com.dramix.app.ui.components.RentalEpisodeGateDialog
+import com.dramix.app.ui.components.SewaBadge
 import com.dramix.app.ui.components.ShortsActionButtons
+import com.dramix.app.ui.components.VipBadge
 import com.dramix.app.ui.theme.CrimsonPlay
 import com.dramix.app.ui.theme.PureBlack
 import com.dramix.app.ui.theme.Slate400
@@ -238,6 +241,13 @@ fun ShortsPlayerScreen(
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.SemiBold
                             )
+                            if (episode?.isSewa == true) {
+                                Spacer(modifier = Modifier.width(6.dp))
+                                SewaBadge()
+                            } else if (episode?.isVip == true) {
+                                Spacer(modifier = Modifier.width(6.dp))
+                                VipBadge()
+                            }
                             uiState.detail?.score?.let { score ->
                                 if (score.isNotBlank()) {
                                     Spacer(modifier = Modifier.width(8.dp))
@@ -301,6 +311,8 @@ fun ShortsPlayerScreen(
                 detail = uiState.detail!!,
                 episodes = episodes,
                 activeEpisodeNumber = episodes.getOrNull(uiState.currentEpisodeIndex)?.number ?: 1,
+                isRefreshing = uiState.isRefreshing,
+                onRefresh = { viewModel.refreshCurrentEpisode() },
                 onEpisodeSelected = { selectedEp ->
                     val index = episodes.indexOf(selectedEp)
                     if (index >= 0) {
@@ -321,6 +333,17 @@ fun ShortsPlayerScreen(
                 },
                 onDismiss = {
                     viewModel.dismissLicenseGate()
+                }
+            )
+        }
+
+        // Rental Gate Dialog for Episode Sewa
+        uiState.rentalBlockedEpisode?.let { blockedEp ->
+            RentalEpisodeGateDialog(
+                episodeTitle = blockedEp.title,
+                episodeNumber = blockedEp.number,
+                onDismiss = {
+                    viewModel.dismissRentalGate()
                 }
             )
         }

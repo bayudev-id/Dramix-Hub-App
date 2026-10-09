@@ -12,9 +12,12 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -34,6 +37,7 @@ import androidx.compose.ui.unit.sp
 import com.dramix.app.domain.model.DramaDetail
 import com.dramix.app.domain.model.Episode
 import com.dramix.app.ui.components.AdaptiveEpisodeList
+import com.dramix.app.ui.theme.CrimsonPlay
 import com.dramix.app.ui.theme.MidnightCard
 import com.dramix.app.ui.theme.PureBlack
 import com.dramix.app.ui.theme.Slate400
@@ -45,6 +49,8 @@ fun ShortsDetailBottomSheet(
     detail: DramaDetail,
     episodes: List<Episode>,
     activeEpisodeNumber: Int,
+    isRefreshing: Boolean = false,
+    onRefresh: () -> Unit = {},
     onEpisodeSelected: (Episode) -> Unit,
     onDismissRequest: () -> Unit
 ) {
@@ -114,12 +120,39 @@ fun ShortsDetailBottomSheet(
 
                 Spacer(modifier = Modifier.height(20.dp))
 
-                Text(
-                    text = "Daftar Episode",
-                    color = Slate50,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Daftar Episode",
+                        color = Slate50,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    // Refresh Button
+                    if (isRefreshing) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            color = CrimsonPlay,
+                            strokeWidth = 2.dp
+                        )
+                    } else {
+                        IconButton(
+                            onClick = onRefresh,
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Refresh,
+                                contentDescription = "Refresh Episode",
+                                tint = CrimsonPlay,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+                }
 
                 Spacer(modifier = Modifier.height(12.dp))
 

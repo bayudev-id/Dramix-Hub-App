@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.DownloadDone
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -318,13 +319,40 @@ fun VodPlayerScreen(
 
                     // Episode List Section
                     item {
-                        Text(
-                            text = "Daftar Episode",
-                            color = Slate50,
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)
-                        )
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 10.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Daftar Episode",
+                                color = Slate50,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                            
+                            if (uiState.isRefreshing) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(20.dp),
+                                    color = CrimsonPlay,
+                                    strokeWidth = 2.dp
+                                )
+                            } else {
+                                IconButton(
+                                    onClick = { viewModel.refreshCurrentEpisode() },
+                                    modifier = Modifier.size(32.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Refresh,
+                                        contentDescription = "Refresh Episode",
+                                        tint = CrimsonPlay,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            }
+                        }
 
                         val currentSeason = detail.seasons.find { it.index == uiState.currentSeasonIndex }
                             ?: detail.seasons.firstOrNull()
