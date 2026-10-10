@@ -16,6 +16,9 @@ Dokumen ini mendokumentasikan secara rinci analisis akar masalah (*root cause an
 9. [Kasus 9: Shimmer Loading KissKH & Live TV (Grid Column Mismatch 3-Kolom Portrait vs 2-Kolom Landscape)](#kasus-9-shimmer-loading-kisskh--live-tv-grid-column-mismatch-3-kolom-portrait-vs-2-kolom-landscape)
 10. [Kasus 10: Sinkronisasi Status Provider Dinamis pada Pull-to-Refresh Homescreen (Tanpa Restart Aplikasi)](#kasus-10-sinkronisasi-status-provider-dinamis-pada-pull-to-refresh-homescreen-tanpa-restart-aplikasi)
 11. [Kasus 11: Independensi & Dekomposisi State Video Zoom Portrait vs Fullscreen (Isolated Preferences Storage)](#kasus-11-independensi--dekomposisi-state-video-zoom-portrait-vs-fullscreen-isolated-preferences-storage)
+12. [Kasus 12: Urutan Episode Terbalik & Bug Episode Bernomor 0 pada KissKH (Falsy JavaScript Evaluation & Ascending Sort)](#kasus-12-urutan-episode-terbalik--bug-episode-bernomor-0-pada-kisskh-falsy-javascript-evaluation--ascending-sort)
+13. [Kasus 13: Error ExoPlayer UnrecognizedInputFormatException pada Episode Ongoing KissKH (Countdown Timer Widget vs Video Stream)](#kasus-13-error-exoplayer-unrecognizedinputformatexception-pada-episode-ongoing-kisskh-countdown-timer-widget-vs-video-stream)
+14. [Kasus 14: Kegagalan Pemutaran Youku — Widevine CBCS DRM Decryption, Master Playlist Track Merging, Cleartext HTTP CDN & TextureView vs SurfaceView Secure Decoders](#kasus-14-kegagalan-pemutaran-youku--widevine-cbcs-drm-decryption-master-playlist-track-merging-cleartext-http-cdn--textureview-vs-surfaceview-secure-decoders)
 
 ---
 
@@ -741,3 +744,235 @@ fun selectProvider(providerId: String) {
 
 ### Pencegahan ke Depan
 - **Validasi Format Stream Sebelum Dikirim ke Pemutar**: Pastikan URL stream media yang diteruskan ke ExoPlayer benar-benar merupakan manifest media (.m3u8, .mpd) atau file kontainer (.mp4), bukan URL halaman web atau widget embedding.
+
+---
+
+## Kasus 14: Kegagalan Pemutaran Youku — Widevine CBCS DRM Decryption, Master Playlist Track Merging, Cleartext HTTP CDN & TextureView vs SurfaceView Secure Decoders
+
+### Gejala Masalah
+1. Saat pengguna memutar drama atau episode dari provider Youku, layar pemutar hanya menampilkan layar hitam pekat (*black screen*), animasi buffering tidak kunjung selesai, dan tidak ada audio maupun gambar yang muncul.
+2. Pada investigasi logcat awal, muncul error berturut-turut:
+   - `UnrecognizedInputFormatException: None of the available extractors ... could read the stream` saat membaca playlist HLS Youku.
+   - `Cleartext HTTP traffic not permitted` saat ExoPlayer mencoba mengunduh chunk segmen video dari domain CDN pihak ketiga Youku.
+   - `IllegalStateException (DefaultDrmSession.requiresSecureDecoder)` akibat kegagalan request provisioning sertifikat perangkat.
+   - Status 202 `drm type error` dari server lisensi DRM Youku saat Android client meminta decoding kunci.
+3. Setelah alur DRM lisensi diperbaiki hingga berhasil (`states: 0` dan `"wvpl license gen succ"`), **audio terdengar berjalan lancar, namun video tetap black screen dan tampilan tampak freeze/kaku**. Logcat sistem menampilkan peringatan GPU berulang:
+   `GPUAUX : [AUX]_AUXPrepareSrcImageInfo: skip, cannot convert protect / secure buffer`.
+
+### Akar Masalah (Root Cause)
+1. **Enkripsi DRM CBCS / Widevine Modular**:
+   - Berbeda dari provider video umum yang menyajikan stream HLS tanpa enkripsi (*clear*), stream Youku diproteksi menggunakan enkripsi Common Encryption Pattern AES-CBCS (`sample-aes` / `cbcs`) dengan sistem perlindungan Google Widevine Modular (UUID: `edef8ba9-79d6-4ace-a3c8-27dcd51d21ed`).
+   - Informasi enkripsi tidak diletakkan pada tag `#EXT-X-KEY` standar di playlist m3u8, melainkan di dalam init fragment MP4 (`_video_init.mp4`) pada box `pssh` (Protection System Specific Header). Tanpa DRM Session Manager terkonfigurasi, ExoPlayer tidak dapat menginisialisasi decoder.
+2. **Protokol Lisensi Kustom Youku (Form-Encoded Base64)**:
+   - Endpoint lisensi Youku (`https://drm-license.youku.tv/ups/drm.json`) tidak menggunakan payload binary OCTET-STREAM standar Android Widevine.
+   - Server lisensi mewajibkan HTTP POST dengan format `application/x-www-form-urlencoded` yang membawa parameter sesi (`token`, `vid`, `utdid`, `psid`, `drmType=widevine`, dll.) dan Base64-encoded binary challenge pada parameter `licenseRequest`.
+   - Respons server berupa JSON (`{"data": "<base64_key>", "states": 0, "msg": "wvpl license gen succ"}`).
+   - Jika POST dikirimkan ke URL yang masih membawa query string lama (`?drmType=cbcs...`), server mengalami konflik parameter dan membalas dengan status 202 `drm type error`.
+3. **Kegagalan Delegasi Provisioning Sertifikat Widevine**:
+   - Perangkat Android tertentu membutuhkan provisioning sertifikat dari server Google (`https://www.googleapis.com/certificateprovisioning/...`) sebelum sesi DRM pertama dapat dibuka.
+   - Implementasi kustom `MediaDrmCallback` yang mencoba menangani `executeProvisionRequest` secara manual dengan request POST kosong memicu kegagalan network, sehingga `DefaultDrmSession` gagal memperoleh secure crypto object dan memicu `IllegalStateException` saat memeriksa `requiresSecureDecoder`.
+4. **Pemisahan Track Audio dan Video (Sub-Playlist vs Master Playlist)**:
+   - Upstream API Youku menyajikan stream dalam bentuk sub-playlist terpisah: video m3u8 hanya berisi segmen video (`_video_00001.mp4`), sedangkan audio disajikan terpisah (`_audio_00001.mp4`).
+   - URL default `s.url` pada upstream hanya menunjuk ke video sub-playlist (tanpa deklarasi `#EXT-X-MEDIA:TYPE=AUDIO`). Tanpa `master_url`, ExoPlayer memutar video tanpa track audio sama sekali.
+5. **Inferensi Format Manifest `/playlist/m3u8`**:
+   - URL manifest Youku berformat `https://pl-ali.youku.tv/playlist/m3u8?vid=...`. Karena path berakhir dengan `/m3u8` dan bukan ekstensi file `.m3u8`, ExoPlayer gagal mengenali container type secara otomatis dan menganggapnya sebagai file MP4 progresif, memicu `UnrecognizedInputFormatException`.
+6. **Blokir Lalu Lintas HTTP Cleartext CDN**:
+   - Server CDN Youku (`valipl10.cp31.ott.cibntv.net`) menyajikan potongan media melalui HTTP port 80 (bukan HTTPS). Android 9 (API 28)+ secara default memblokir semua lalu lintas HTTP cleartext, menyebabkan download segmen gagal seketika.
+7. **Inkompatibilitas TextureView vs Hardware Secure Decoder (L1 Widevine)**:
+   - Ini merupakan penyebab utama audio berputar normal tetapi video tetap black screen dan freeze.
+   - Pada layout `item_player_view.xml`, komponen `PlayerView` dikonfigurasi dengan:
+     ```xml
+     app:surface_type="texture_view"
+     ```
+   - Ketika media terenkripsi Widevine diputar, ExoPlayer menginisialisasi hardware secure decoder (`c2.mtk.avc.decoder.secure` pada chipset MediaTek / Qualcomm). Hardware secure decoder mengalirkan frame video terdekripsi secara eksklusif ke dalam secure buffer memori TEE (*Trusted Execution Environment*).
+   - `TextureView` beroperasi dengan mengekspos frame video sebagai OpenGL ES texture yang harus di-composite oleh GPU driver aplikasi. Karena secure buffer tidak boleh diakses oleh subsistem GPU non-secure demi proteksi hak cipta, GPU driver menolak memproses frame:
+     `GPUAUX : skip, cannot convert protect / secure buffer`.
+   - Akibatnya tidak ada satu pun frame video yang berhasil digambar ke layar, sedangkan decoder audio (`c2.android.aac.decoder`) beroperasi tanpa pembatasan secure surface sehingga audio tetap bersuara normal.
+
+### Cara Mendiagnosis
+1. **Pemeriksaan Header Playlist & Init Segment**:
+   ```bash
+   curl -s "https://valipl10.cp31.ott.cibntv.net/..._video_init.mp4" | grep -a "pssh"
+   ```
+   Ditemukan box PSSH dengan SystemID `edef8ba9-79d6-4ace-a3c8-27dcd51d21ed`, mengonfirmasi stream membutuhkan Widevine decryption.
+2. **Inspeksi Respons Server Lisensi**:
+   Mengirim POST dengan challenge biner Widevine ke `https://drm-license.youku.tv/ups/drm.json` memverifikasi struktur form-data yang dibutuhkan serta mendeteksi bahwa pengiriman parameter di query URL memicu `states: 202` (`drm type error`).
+3. **Trace Logcat MediaCodec & GPU Buffer**:
+   ```bash
+   adb logcat | grep -E "GPUAUX|gralloc|c2.mtk|MediaCodec|DefaultDrmSession"
+   ```
+   Menemukan log `c2.mtk.avc.decoder.secure` berhasil terhubung ke surface dan DRM berstatus `wvpl license gen succ`, tetapi diikuti ratusan pesan `GPUAUX : skip, cannot convert protect / secure buffer`. Ini adalah bukti definitif bahwa tipe surface yang digunakan (`TextureView`) tidak dapat merender secure buffer hardware.
+
+### Solusi & Implementasi Multi-Layer
+
+#### 1. Transformasi SurfaceView Hardware Overlay (`item_player_view.xml`)
+Ubah konfigurasi permukaan render `PlayerView` dari `texture_view` menjadi `surface_view`:
+```xml
+<!-- app/src/main/res/layout/item_player_view.xml -->
+<androidx.media3.ui.PlayerView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/player_view"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    app:surface_type="surface_view"
+    app:use_controller="false"
+    app:show_buffering="never" />
+```
+`SurfaceView` mengalokasikan hardware overlay terpisah yang terhubung langsung ke SurfaceFlinger (`BLASTBufferQueue`), memungkinkan secure decoder menuliskan frame langsung ke display plane tanpa perlu melalui GPU texture compositor.
+
+#### 2. Implementasi Kustom Widevine DRM Callback (`WidevineDrmCallback.kt`)
+Bangun bridge kustom yang menerjemahkan protokol biner ExoPlayer ke protokol Form-Data Youku:
+```kotlin
+@OptIn(UnstableApi::class)
+class WidevineDrmCallback(
+    private val defaultLicenseUrl: String?,
+    private val licenseParams: Map<String, String>,
+    private val headers: Map<String, String>,
+    private val okHttpClient: OkHttpClient
+) : MediaDrmCallback {
+
+    private val defaultDrmCallback = HttpMediaDrmCallback(
+        defaultLicenseUrl,
+        DefaultHttpDataSource.Factory()
+    )
+
+    override fun executeProvisionRequest(
+        uuid: UUID,
+        request: ExoMediaDrm.ProvisionRequest
+    ): ByteArray {
+        // Delegasikan provisioning sertifikat perangkat ke handler bawaan ExoPlayer
+        return defaultDrmCallback.executeProvisionRequest(uuid, request)
+    }
+
+    override fun executeKeyRequest(
+        uuid: UUID,
+        request: ExoMediaDrm.KeyRequest
+    ): ByteArray {
+        val rawTargetUrl = request.licenseServerUrl.takeIf { !it.isNullOrBlank() }
+            ?: defaultLicenseUrl
+            ?: "https://drm-license.youku.tv/ups/drm.json"
+        
+        // Bersihkan query string agar tidak konflik dengan form body
+        val targetUrl = rawTargetUrl.substringBefore("?")
+        val challengeBase64 = Base64.encodeToString(request.data, Base64.NO_WRAP)
+
+        val formBodyBuilder = FormBody.Builder()
+        var hasDrmType = false
+        for ((key, value) in licenseParams) {
+            if (key.equals("drmType", ignoreCase = true)) {
+                formBodyBuilder.add("drmType", "widevine")
+                hasDrmType = true
+            } else if (!key.equals("licenseRequest", ignoreCase = true)) {
+                formBodyBuilder.add(key, value)
+            }
+        }
+        if (!hasDrmType) {
+            formBodyBuilder.add("drmType", "widevine")
+        }
+        formBodyBuilder.add("licenseRequest", challengeBase64)
+
+        val req = Request.Builder()
+            .url(targetUrl)
+            .post(formBodyBuilder.build())
+            .build()
+
+        okHttpClient.newCall(req).execute().use { response ->
+            val respString = response.body?.string() ?: ""
+            val json = JSONObject(respString)
+            val states = json.optInt("states", -1)
+            val dataB64 = json.optString("data", "")
+            if (dataB64.isNotBlank() && (states == 0 || states == 1)) {
+                return Base64.decode(dataB64, Base64.DEFAULT)
+            } else {
+                val msg = json.optString("msg", "states=$states")
+                throw IOException("DRM license error: $msg ($states)")
+            }
+        }
+    }
+}
+```
+
+#### 3. Konfigurasi DefaultDrmSessionManager di Player Controller (`DramixPlayerController.kt`)
+Aktifkan manajemen multi-session untuk track audio dan video yang terenkripsi terpisah, serta toleransi clear sample:
+```kotlin
+if (drmConfig != null && (!drmConfig.licenseUrl.isNullOrBlank() || drmConfig.licenseParams.isNotEmpty())) {
+    val drmCallback = WidevineDrmCallback(
+        defaultLicenseUrl = drmConfig.licenseUrl,
+        licenseParams = drmConfig.licenseParams,
+        headers = headers,
+        okHttpClient = headerDataSourceFactory.getOkHttpClient()
+    )
+    val drmSessionManager = DefaultDrmSessionManager.Builder()
+        .setUuidAndExoMediaDrmProvider(
+            C.WIDEVINE_UUID,
+            FrameworkMediaDrm.DEFAULT_PROVIDER
+        )
+        .setMultiSession(true)
+        .setPlayClearSamplesWithoutKeys(true)
+        .build(drmCallback)
+
+    val mediaSourceFactory = DefaultMediaSourceFactory(headerDataSourceFactory)
+        .setDrmSessionManagerProvider { drmSessionManager }
+
+    val mediaSource = mediaSourceFactory.createMediaSource(mediaItem)
+    player.setMediaSource(mediaSource, /* resetPosition = */ true)
+}
+```
+
+#### 4. Inferensi Eksplisit MIME Type HLS (`DramixPlayerController.kt`)
+Tangani URL path `/m3u8` agar tidak disalahartikan sebagai format kontainer lain:
+```kotlin
+val inferredMimeType = when {
+    streamFormat?.equals("m3u8", ignoreCase = true) == true ||
+        streamFormat?.equals("hls", ignoreCase = true) == true ||
+        streamUrl.contains(".m3u8", ignoreCase = true) ||
+        streamUrl.contains("/m3u8", ignoreCase = true) -> MimeTypes.APPLICATION_M3U8
+    streamFormat?.equals("mpd", ignoreCase = true) == true ||
+        streamFormat?.equals("dash", ignoreCase = true) == true ||
+        streamUrl.contains(".mpd", ignoreCase = true) -> MimeTypes.APPLICATION_MPD
+    streamFormat?.equals("mp4", ignoreCase = true) == true ||
+        streamUrl.contains(".mp4", ignoreCase = true) -> MimeTypes.VIDEO_MP4
+    else -> null
+}
+if (inferredMimeType != null) {
+    mediaItemBuilder.setMimeType(inferredMimeType)
+}
+```
+
+#### 5. Pemilihan Master Playlist & Normalisasi DRM di Gateway (`source.pb.js`)
+Pilih `master_url` agar audio tracks (`cmfa1hd`, `cmfa1sd`) tersinkronisasi bersama video:
+```javascript
+let streamUrl = String(s.url || "");
+if (canonicalId === "youku" && s.master_url) {
+    streamUrl = String(s.master_url);
+} else if (!streamUrl && s.master_url) {
+    streamUrl = String(s.master_url);
+}
+
+let drmObj = s.drm || null;
+if (drmObj && canonicalId === "youku") {
+    if (drmObj.license_params) {
+        drmObj.license_params.drmType = "widevine";
+    }
+    if (drmObj.license_url) {
+        drmObj.license_url = drmObj.license_url.replace(/drmType=[^&]+/, "drmType=widevine");
+    }
+}
+```
+
+#### 6. Whitelist Domain Cleartext HTTP (`network_security_config.xml`)
+Izinkan lalu lintas HTTP port 80 untuk CDN segmen video Youku:
+```xml
+<domain includeSubdomains="true">cibntv.net</domain>
+<domain includeSubdomains="true">youku.com</domain>
+<domain includeSubdomains="true">youku.tv</domain>
+```
+
+### Pencegahan ke Depan
+- **Gunakan SurfaceView untuk Aplikasi Media Streaming Universal**:
+  Jangan pernah menggunakan `TextureView` sebagai default renderer pada aplikasi yang berpotensi memutar konten terenkripsi DRM (Widevine, PlayReady). Meskipun `TextureView` memudahkan animasi alpha dan transformasi view di masa lalu, Android modern dengan Compose dan `SurfaceView` (khususnya melalui `BLASTBufferQueue`) jauh lebih efisien dalam konsumsi baterai, bebas alokasi GPU ganda, dan wajib digunakan untuk video terproteksi TEE hardware level.
+- **Isolasi Query String pada Endpoint Lisensi Berbasis Form-Data**:
+  Saat memanggil server DRM pihak ketiga yang menggunakan form-encoded POST, selalu buang query string dari target URL (`url.substringBefore("?")`) guna mencegah ambiguitas parameter parser di sisi gateway/server otentikasi.
+- **Pertahankan Delegasi Provisioning Default**:
+  Jangan pernah menulis ulang logika `executeProvisionRequest` secara manual kecuali benar-benar menggunakan server provisioning in-house privat. Selalu delegasikan ke `HttpMediaDrmCallback` bawaan sistem operasi.
+

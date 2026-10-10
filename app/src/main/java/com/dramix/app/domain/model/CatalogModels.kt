@@ -121,11 +121,20 @@ data class PlaybackSource(
     val isCountdown: Boolean = false
 )
 
+data class DrmConfig(
+    val licenseUrl: String? = null,
+    val licenseMethod: String? = null,
+    val licenseParams: Map<String, String> = emptyMap(),
+    val type: String? = null,
+    val systems: List<String> = emptyList()
+)
+
 data class StreamSource(
     val quality: String? = null,
     val format: String? = null,
     val url: String,
     val isDrm: Boolean = false,
+    val drm: DrmConfig? = null,
     val headers: Map<String, String> = emptyMap()
 )
 

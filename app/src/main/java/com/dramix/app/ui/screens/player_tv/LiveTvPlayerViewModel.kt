@@ -193,7 +193,8 @@ class LiveTvPlayerViewModel(
                             headers = headers,
                             startPositionMs = 0L,
                             autoPlay = true,
-                            streamFormat = stream.format
+                            streamFormat = stream.format,
+                            drmConfig = stream.drm
                         )
 
                         _uiState.value = _uiState.value.copy(

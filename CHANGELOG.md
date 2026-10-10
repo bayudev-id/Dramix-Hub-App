@@ -8,6 +8,17 @@ Format penulisan berpedoman pada [Keep a Changelog](https://keepachangelog.com/i
 ## [Unreleased]
 
 ### Added
+- **Dukungan Widevine CBCS DRM & Custom Form License Flow (`WidevineDrmCallback.kt`, `DramixPlayerController.kt`)**:
+  - Menghadirkan callback DRM kustom `WidevineDrmCallback` yang menerjemahkan permintaan kunci biner ExoPlayer menjadi HTTP POST `application/x-www-form-urlencoded` dengan Base64 challenge dan parameter sesi Youku (`token`, `vid`, `utdid`, `psid`, `drmType=widevine`).
+  - Mendekode respons JSON lisensi (`states: 0`, `"wvpl license gen succ"`) menjadi binary key response untuk ExoPlayer.
+  - Mendelegasikan eksekusi provisioning sertifikat perangkat ke `HttpMediaDrmCallback` default Google Play Services.
+  - Mengonfigurasi `DefaultDrmSessionManager` dengan `multiSession = true` dan `playClearSamplesWithoutKeys = true` untuk dekripsi terpisah track audio dan video.
+- **Penerusan Metadata DRM Multi-Layer (`PlaybackDtos.kt`, `CatalogModels.kt`, `CatalogRepositoryImpl.kt`, `VodPlayerViewModel.kt`, `LiveTvPlayerViewModel.kt`, `ShortsPlayerViewModel.kt`)**:
+  - Menambahkan struktur data `DrmDto` dan `DrmConfig` (`licenseUrl`, `licenseMethod`, `licenseParams`, `type`, `systems`) pada DTO, model domain, dan ViewModel pemutar.
+- **Whitelist Domain Cleartext HTTP untuk CDN Media (`network_security_config.xml`)**:
+  - Mengizinkan lalu lintas HTTP port 80 untuk domain CDN Youku (`cibntv.net`, `youku.com`, `youku.tv`) yang menyajikan segmen fMP4.
+- **Inferensi Format Manifest `/playlist/m3u8` (`DramixPlayerController.kt`)**:
+  - Menambahkan deteksi MIME type otomatis (`MimeTypes.APPLICATION_M3U8`) untuk URL path `/m3u8` tanpa ekstensi file.
 - **Widget Countdown Timer untuk Episode Ongoing/Belum Rilis (`VodPlayerCountdownOverlay.kt`, `VodPlayerScreen.kt`)**:
   - Menghadirkan overlay pemutar khusus saat episode drama masih berstatus ongoing dan upstream menyediakan widget hitung mundur (seperti TickCounter).
   - Menyematkan `WebView` terisolasi dengan latar belakang transparan/gelap untuk merender countdown timer secara langsung di dalam area pemutar, dilengkapi tombol "Cek Ketersediaan" (refresh).
@@ -49,8 +60,16 @@ Format penulisan berpedoman pada [Keep a Changelog](https://keepachangelog.com/i
 - **Standarisasi Visual Chip Provider**: Mengadopsi styling chip dari HomeScreen (`RoundedCornerShape(16.dp)`, aksen `CrimsonPlay`, background `MidnightCard`, border `MidnightBorder`).
 - **Integrasi Preferences pada Search**: Menghubungkan `ProviderPreferences` ke dalam `SearchViewModel` melalui DI Koin (`AppModule.kt`).
 - **Category Validation Fallback**: Auto-fallback ke kategori pertama jika `lastCategoryId` tidak valid/tidak ditemukan di provider baru (fix untuk HTTP 502 saat ganti provider).
+- **Migrasi Render Surface ke SurfaceView (`item_player_view.xml`)**:
+  - Mengubah `app:surface_type="texture_view"` menjadi `app:surface_type="surface_view"` pada layout PlayerView VOD dan Live TV.
+  - Memungkinkan hardware secure video decoder (`c2.mtk.avc.decoder.secure`) merender secure frame buffer langsung ke hardware overlay plane tanpa penolakan dari GPU OpenGL compositor (`GPUAUX: skip, cannot convert protect / secure buffer`).
 
 ### Fixed
+- **Black Screen & Freeze pada Konten Terenkripsi DRM Youku (`item_player_view.xml`, `WidevineDrmCallback.kt`, `DramixPlayerController.kt`)**:
+  - Menyelesaikan masalah black screen dan UI freeze yang terjadi karena ketidakcocokan antara hardware secure decoder TEE dan `TextureView`.
+  - Memperbaiki kegagalan perolehan kunci lisensi Youku (status 202 `drm type error`) dengan membersihkan parameter URL query string dan mengirimkan parameter form body murni.
+  - Memperbaiki crash `IllegalStateException` pada pemeriksaan `requiresSecureDecoder` dengan mendelegasikan alur provisioning sertifikat perangkat ke `HttpMediaDrmCallback` default.
+  - Memperbaiki video tanpa suara dengan memilih `master_url` yang menggabungkan audio dan video sub-playlist.
 - **Urutan Episode KissKH Ascending & Dimulai dari Episode Awal (0 atau 1) (`detail.pb.js`, `CatalogRepositoryImpl.kt`)**:
   - Menyortir urutan episode KissKH secara ascending berdasarkan nomor episode sehingga Episode 1 (atau Episode 0) selalu berada di depan dan diputar pertama kali, alih-alih terbalik dengan episode terbaru/belum rilis di awal.
   - Memperbaiki bug konversi JavaScript di `detail.pb.js` di mana `0 || (i + 1)` menganggap episode bernomor 0 sebagai falsy dan mengubahnya menjadi episode terakhir ("Episode 3"). Kini nilai 0 dipertahankan dengan validasi numerik eksplisit.

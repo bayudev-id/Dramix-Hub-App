@@ -16,11 +16,21 @@ data class PlaybackSourceDataDto(
 )
 
 @JsonClass(generateAdapter = true)
+data class DrmDto(
+    @Json(name = "license_url") val licenseUrl: String? = null,
+    @Json(name = "license_method") val licenseMethod: String? = null,
+    @Json(name = "license_params") val licenseParams: Map<String, String>? = null,
+    @Json(name = "type") val type: String? = null,
+    @Json(name = "systems") val systems: List<String>? = null
+)
+
+@JsonClass(generateAdapter = true)
 data class StreamDto(
     @Json(name = "quality") val quality: String? = null,
     @Json(name = "format") val format: String? = null,
     @Json(name = "url") val url: String,
     @Json(name = "is_drm") val isDrm: Boolean = false,
+    @Json(name = "drm") val drm: DrmDto? = null,
     @Json(name = "headers") val headers: Map<String, String>? = null
 )
 

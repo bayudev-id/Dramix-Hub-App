@@ -22,6 +22,8 @@ class HeaderInjectingDataSourceFactory(
         dynamicHeaders.putAll(headers)
     }
 
+    fun getOkHttpClient(): OkHttpClient = okHttpClient
+
     fun addHeader(key: String, value: String) {
         dynamicHeaders[key] = value
     }

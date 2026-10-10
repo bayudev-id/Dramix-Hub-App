@@ -80,7 +80,8 @@ class DramixPlayerController(
         autoPlay: Boolean = true,
         subtitles: List<Subtitle> = emptyList(),
         preferredSubtitleLang: String? = null,
-        streamFormat: String? = null
+        streamFormat: String? = null,
+        drmConfig: com.dramix.app.domain.model.DrmConfig? = null
     ) {
         try {
             headerDataSourceFactory.setHeaders(headers)
@@ -88,6 +89,22 @@ class DramixPlayerController(
 
             val mediaItemBuilder = MediaItem.Builder()
                 .setUri(Uri.parse(streamUrl))
+
+            val inferredMimeType = when {
+                streamFormat?.equals("m3u8", ignoreCase = true) == true ||
+                    streamFormat?.equals("hls", ignoreCase = true) == true ||
+                    streamUrl.contains(".m3u8", ignoreCase = true) ||
+                    streamUrl.contains("/m3u8", ignoreCase = true) -> MimeTypes.APPLICATION_M3U8
+                streamFormat?.equals("mpd", ignoreCase = true) == true ||
+                    streamFormat?.equals("dash", ignoreCase = true) == true ||
+                    streamUrl.contains(".mpd", ignoreCase = true) -> MimeTypes.APPLICATION_MPD
+                streamFormat?.equals("mp4", ignoreCase = true) == true ||
+                    streamUrl.contains(".mp4", ignoreCase = true) -> MimeTypes.VIDEO_MP4
+                else -> null
+            }
+            if (inferredMimeType != null) {
+                mediaItemBuilder.setMimeType(inferredMimeType)
+            }
 
             if (subtitles.isNotEmpty()) {
                 val subtitleConfigurations = subtitles.mapNotNull { sub ->
@@ -115,7 +132,32 @@ class DramixPlayerController(
             }
 
             val mediaItem = mediaItemBuilder.build()
-            player.setMediaItem(mediaItem, /* resetPosition = */ true)
+
+            if (drmConfig != null && (!drmConfig.licenseUrl.isNullOrBlank() || drmConfig.licenseParams.isNotEmpty())) {
+                val drmCallback = com.dramix.app.player.drm.WidevineDrmCallback(
+                    defaultLicenseUrl = drmConfig.licenseUrl,
+                    licenseParams = drmConfig.licenseParams,
+                    headers = headers,
+                    okHttpClient = headerDataSourceFactory.getOkHttpClient()
+                )
+                val drmSessionManager = androidx.media3.exoplayer.drm.DefaultDrmSessionManager.Builder()
+                    .setUuidAndExoMediaDrmProvider(
+                        C.WIDEVINE_UUID,
+                        androidx.media3.exoplayer.drm.FrameworkMediaDrm.DEFAULT_PROVIDER
+                    )
+                    .setMultiSession(true)
+                    .setPlayClearSamplesWithoutKeys(true)
+                    .build(drmCallback)
+
+                val mediaSourceFactory = androidx.media3.exoplayer.source.DefaultMediaSourceFactory(headerDataSourceFactory)
+                    .setDrmSessionManagerProvider { drmSessionManager }
+
+                val mediaSource = mediaSourceFactory.createMediaSource(mediaItem)
+                player.setMediaSource(mediaSource, /* resetPosition = */ true)
+            } else {
+                player.setMediaItem(mediaItem, /* resetPosition = */ true)
+            }
+
             player.seekTo(startPositionMs.coerceAtLeast(0L))
 
             // Subtitle track selection

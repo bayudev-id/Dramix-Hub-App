@@ -11,6 +11,10 @@
         <domain includeSubdomains="true">10.0.2.2</domain>
         <domain includeSubdomains="true">127.0.0.1</domain>
         <domain includeSubdomains="true">localhost</domain>
+        <!-- Streaming CDN domains that serve playlists/segments via HTTP -->
+        <domain includeSubdomains="true">cibntv.net</domain>
+        <domain includeSubdomains="true">youku.com</domain>
+        <domain includeSubdomains="true">youku.tv</domain>
     </domain-config>
 
     <debug-overrides>

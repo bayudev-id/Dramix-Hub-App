@@ -231,6 +231,15 @@ class CatalogRepositoryImpl(
         format = format,
         url = url,
         isDrm = isDrm,
+        drm = drm?.let { d ->
+            com.dramix.app.domain.model.DrmConfig(
+                licenseUrl = d.licenseUrl,
+                licenseMethod = d.licenseMethod,
+                licenseParams = d.licenseParams ?: emptyMap(),
+                type = d.type,
+                systems = d.systems ?: emptyList()
+            )
+        },
         headers = headers ?: emptyMap()
     )
 
