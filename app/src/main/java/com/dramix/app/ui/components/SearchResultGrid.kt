@@ -35,6 +35,9 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.snapshotFlow
@@ -60,6 +63,7 @@ import com.dramix.app.ui.theme.MidnightBorder
 import com.dramix.app.ui.theme.MidnightCard
 import com.dramix.app.ui.theme.PureBlack
 import com.dramix.app.ui.theme.Slate400
+import com.dramix.app.ui.theme.Slate600
 import com.dramix.app.ui.theme.Slate50
 import com.dramix.app.ui.theme.TagBadgeShape
 
@@ -348,10 +352,16 @@ private fun SearchVideoCard(
                 .clip(RoundedCornerShape(8.dp))
                 .background(MidnightCard)
         ) {
+            var isImageError by remember(item.cover) { mutableStateOf(false) }
+
             val imageRequest = remember(item.cover) {
                 ImageRequest.Builder(context)
                     .data(item.cover)
-                    .crossfade(false)
+                    .crossfade(true)
+                    .listener(
+                        onError = { _, _ -> isImageError = true },
+                        onSuccess = { _, _ -> isImageError = false }
+                    )
                     .build()
             }
 
@@ -361,6 +371,22 @@ private fun SearchVideoCard(
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize()
             )
+
+            if (isImageError || item.cover.isNullOrBlank()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(MidnightCard),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Movie,
+                        contentDescription = null,
+                        tint = Slate600,
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
+            }
 
             // Sewa Badge / VIP Badge (Kanan Atas)
             if (item.isSewa) {

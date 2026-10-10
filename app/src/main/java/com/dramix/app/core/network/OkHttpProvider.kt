@@ -45,16 +45,16 @@ object OkHttpProvider {
     fun createImageClient(context: Context): OkHttpClient {
         val dispatcher = Dispatcher().apply {
             maxRequests = 64
-            maxRequestsPerHost = 32
+            maxRequestsPerHost = 16
         }
 
         return OkHttpClient.Builder()
             .dispatcher(dispatcher)
             .connectionPool(ConnectionPool(32, 2, TimeUnit.MINUTES))
             .dns(ipv4FirstDns)
-            .connectTimeout(5, TimeUnit.SECONDS)
-            .readTimeout(10, TimeUnit.SECONDS)
-            .writeTimeout(10, TimeUnit.SECONDS)
+            .connectTimeout(15, TimeUnit.SECONDS)
+            .readTimeout(25, TimeUnit.SECONDS)
+            .writeTimeout(15, TimeUnit.SECONDS)
             .addInterceptor(CdnRefererInterceptor())
             .build()
     }

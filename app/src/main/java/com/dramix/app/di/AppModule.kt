@@ -9,6 +9,7 @@ import com.dramix.app.core.security.SecurityManager
 import com.dramix.app.data.repository.CatalogRepositoryImpl
 import com.dramix.app.data.repository.LicenseRepositoryImpl
 import com.dramix.app.data.source.local.LicensePreferences
+import com.dramix.app.data.source.local.PlayerPreferences
 import com.dramix.app.data.source.local.ProviderPreferences
 import com.dramix.app.data.source.local.SearchPreferences
 import com.dramix.app.domain.manager.EntitlementManager
@@ -38,6 +39,7 @@ val coreModule = module {
     single { DeviceIdentifier(androidContext()) }
     single { SecurityManager() }
     single { LicensePreferences(androidContext()) }
+    single(createdAtStart = true) { PlayerPreferences(androidContext()) }
     single { SearchPreferences(androidContext()) }
     single { ProviderPreferences(androidContext()) }
 
@@ -96,7 +98,8 @@ val viewModelModule = module {
             licenseRepository = get(),
             playerFactory = get(),
             downloadRecordDao = get(),
-            downloadTracker = get()
+            downloadTracker = get(),
+            playerPreferences = get()
         )
     }
     viewModel { (providerId: String?, dramaId: String?) ->

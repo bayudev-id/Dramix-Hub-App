@@ -16,8 +16,10 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
@@ -112,6 +114,16 @@ fun VodPlayerScreen(
         } else {
             ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
         }
+        activity?.window?.let { window ->
+            val insetsController = WindowCompat.getInsetsController(window, window.decorView)
+            insetsController.systemBarsBehavior =
+                WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            if (target) {
+                insetsController.hide(WindowInsetsCompat.Type.systemBars())
+            } else {
+                insetsController.show(WindowInsetsCompat.Type.systemBars())
+            }
+        }
     }
 
     BackHandler(enabled = isFullscreen) {
@@ -189,30 +201,44 @@ fun VodPlayerScreen(
         viewModel.hasNextEpisode()
     }
 
+    val activeSubtitleStyle = if (isFullscreen) uiState.fullscreenSubtitleStyle else uiState.portraitSubtitleStyle
+
     Box(
         modifier = modifier
             .fillMaxSize()
             .background(PureBlack)
     ) {
-        if (isFullscreen) {
-            // Fullscreen Landscape Player Box
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .then(if (!isFullscreen) Modifier.statusBarsPadding() else Modifier)
+        ) {
+            // Unified Player Viewport - never unmounted across fullscreen toggles
             Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black)
+                modifier = if (isFullscreen) {
+                    Modifier
+                        .fillMaxSize()
+                        .background(Color.Black)
+                } else {
+                    Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(16f / 9f)
+                        .clipToBounds()
+                        .background(Color.Black)
+                }
             ) {
                 VideoPlayerSurface(
                     player = viewModel.playerController.player,
                     modifier = Modifier.fillMaxSize(),
                     useController = false,
-                    subtitleStyle = uiState.fullscreenSubtitleStyle,
+                    subtitleStyle = activeSubtitleStyle,
                     videoZoom = uiState.videoZoom
                 )
 
                 if (!uiState.selectedSubtitleId.equals("off", ignoreCase = true) && currentSubtitle != null) {
                     SubtitleOverlay(
                         text = currentSubtitle!!.text,
-                        style = uiState.fullscreenSubtitleStyle,
+                        style = activeSubtitleStyle,
                         modifier = Modifier.fillMaxSize()
                     )
                 }
@@ -224,8 +250,10 @@ fun VodPlayerScreen(
                     isBuffering = isBuffering,
                     currentPositionMs = currentPositionMs,
                     durationMs = durationMs,
-                    isFullscreen = true,
-                    onNavigateBack = { toggleFullscreen() },
+                    isFullscreen = isFullscreen,
+                    onNavigateBack = {
+                        if (isFullscreen) toggleFullscreen() else onNavigateBack()
+                    },
                     onTogglePlayPause = { viewModel.playerController.togglePlayPause() },
                     onSeekTo = { pos -> viewModel.playerController.seekTo(pos) },
                     onSeekBy = { offset -> viewModel.playerController.seekBy(offset) },
@@ -249,15 +277,17 @@ fun VodPlayerScreen(
                     onPlayNextEpisode = { viewModel.playNextEpisode() },
                     videoZoom = uiState.videoZoom,
                     onUpdateZoom = { delta -> viewModel.updateVideoZoom(delta) },
-                    subtitleStyle = uiState.fullscreenSubtitleStyle,
-                    onSelectFontFamily = { f -> viewModel.selectSubtitleFontFamily(f, isFullscreen = true) },
-                    onSelectOutlineStyle = { o -> viewModel.selectSubtitleOutlineStyle(o, isFullscreen = true) },
-                    onUpdateFontSize = { delta -> viewModel.updateSubtitleFontSize(delta, isFullscreen = true) },
-                    onUpdatePosition = { delta -> viewModel.updateSubtitlePosition(delta, isFullscreen = true) },
-                    onUpdateBgOpacity = { delta -> viewModel.updateSubtitleBgOpacity(delta, isFullscreen = true) },
-                    onSetBgOpacity = { opacity -> viewModel.setSubtitleBgOpacity(opacity, isFullscreen = true) },
-                    onUpdateTextColor = { color -> viewModel.updateSubtitleTextColor(color, isFullscreen = true) },
-                    onUpdateBgColor = { color -> viewModel.updateSubtitleBgColor(color, isFullscreen = true) }
+                    subtitleStyle = activeSubtitleStyle,
+                    onSelectFontFamily = { f -> viewModel.selectSubtitleFontFamily(f, isFullscreen = isFullscreen) },
+                    onSelectOutlineStyle = { o -> viewModel.selectSubtitleOutlineStyle(o, isFullscreen = isFullscreen) },
+                    onUpdateFontSize = { delta -> viewModel.updateSubtitleFontSize(delta, isFullscreen = isFullscreen) },
+                    onUpdatePosition = { delta -> viewModel.updateSubtitlePosition(delta, isFullscreen = isFullscreen) },
+                    onUpdateBgOpacity = { delta -> viewModel.updateSubtitleBgOpacity(delta, isFullscreen = isFullscreen) },
+                    onSetBgOpacity = { opacity -> viewModel.setSubtitleBgOpacity(opacity, isFullscreen = isFullscreen) },
+                    onUpdateTextColor = { color -> viewModel.updateSubtitleTextColor(color, isFullscreen = isFullscreen) },
+                    onUpdateBgColor = { color -> viewModel.updateSubtitleBgColor(color, isFullscreen = isFullscreen) },
+                    onUpdateLineSpacing = { delta -> viewModel.updateSubtitleLineSpacing(delta, isFullscreen = isFullscreen) },
+                    onUpdateBgPadding = { delta -> viewModel.updateSubtitleBackgroundPadding(delta, isFullscreen = isFullscreen) }
                 )
 
                 if (uiState.errorMessage != null && !uiState.isLoadingPlayback && uiState.rentalBlockedEpisode == null) {
@@ -267,86 +297,13 @@ fun VodPlayerScreen(
                     )
                 }
             }
-        } else {
-            Column(modifier = Modifier.fillMaxSize()) {
-                // Player Area (16:9 aspect ratio at the top)
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .aspectRatio(16f / 9f)
-                        .clipToBounds()
-                        .background(Color.Black)
-                ) {
-                    VideoPlayerSurface(
-                        player = viewModel.playerController.player,
-                        modifier = Modifier.fillMaxSize(),
-                        useController = false,
-                        subtitleStyle = uiState.portraitSubtitleStyle,
-                        videoZoom = uiState.videoZoom
-                    )
 
-                    if (!uiState.selectedSubtitleId.equals("off", ignoreCase = true) && currentSubtitle != null) {
-                        SubtitleOverlay(
-                            text = currentSubtitle!!.text,
-                            style = uiState.portraitSubtitleStyle,
-                            modifier = Modifier.fillMaxSize()
-                        )
-                    }
-
-                    VodPlayerOverlay(
-                        dramaTitle = dramaTitle,
-                        episodeTitle = episodeTitle,
-                        isPlaying = isPlaying,
-                        isBuffering = isBuffering,
-                        currentPositionMs = currentPositionMs,
-                        durationMs = durationMs,
-                        isFullscreen = false,
-                        onNavigateBack = onNavigateBack,
-                        onTogglePlayPause = { viewModel.playerController.togglePlayPause() },
-                        onSeekTo = { pos -> viewModel.playerController.seekTo(pos) },
-                        onSeekBy = { offset -> viewModel.playerController.seekBy(offset) },
-                        onToggleFullscreen = { toggleFullscreen() },
-                        isSettingsOpen = isSettingsMenuOpen,
-                        onOpenSettings = { isSettingsMenuOpen = true },
-                        onDismissSettings = { isSettingsMenuOpen = false },
-                        qualities = uiState.availableQualities,
-                        selectedQuality = uiState.selectedQuality,
-                        onSelectQuality = { q -> viewModel.selectQuality(q) },
-                        subtitles = uiState.availableSubtitles,
-                        selectedSubtitleId = uiState.selectedSubtitleId,
-                        onSelectSubtitle = { sId -> viewModel.selectSubtitle(sId) },
-                        playbackSpeed = uiState.playbackSpeed,
-                        onSelectSpeed = { speed -> viewModel.setPlaybackSpeed(speed) },
-                        isAutoNext = uiState.isAutoNext,
-                        onToggleAutoNext = { enabled -> viewModel.toggleAutoNext(enabled) },
-                        hasPreviousEpisode = hasPreviousEpisode,
-                        hasNextEpisode = hasNextEpisode,
-                        onPlayPreviousEpisode = { viewModel.playPreviousEpisode() },
-                        onPlayNextEpisode = { viewModel.playNextEpisode() },
-                        videoZoom = uiState.videoZoom,
-                        onUpdateZoom = { delta -> viewModel.updateVideoZoom(delta) },
-                        subtitleStyle = uiState.portraitSubtitleStyle,
-                        onSelectFontFamily = { f -> viewModel.selectSubtitleFontFamily(f, isFullscreen = false) },
-                        onSelectOutlineStyle = { o -> viewModel.selectSubtitleOutlineStyle(o, isFullscreen = false) },
-                        onUpdateFontSize = { delta -> viewModel.updateSubtitleFontSize(delta, isFullscreen = false) },
-                        onUpdatePosition = { delta -> viewModel.updateSubtitlePosition(delta, isFullscreen = false) },
-                        onUpdateBgOpacity = { delta -> viewModel.updateSubtitleBgOpacity(delta, isFullscreen = false) },
-                        onSetBgOpacity = { opacity -> viewModel.setSubtitleBgOpacity(opacity, isFullscreen = false) },
-                        onUpdateTextColor = { color -> viewModel.updateSubtitleTextColor(color, isFullscreen = false) },
-                        onUpdateBgColor = { color -> viewModel.updateSubtitleBgColor(color, isFullscreen = false) }
-                    )
-
-                    if (uiState.errorMessage != null && !uiState.isLoadingPlayback && uiState.rentalBlockedEpisode == null) {
-                        VodPlayerErrorOverlay(
-                            errorMessage = uiState.errorMessage!!,
-                            onRetry = { viewModel.refreshCurrentEpisode() }
-                        )
-                    }
-                }
-
-                // Scrollable Content & Metadata Area
+            // Scrollable Content & Metadata Area - Only rendered in portrait mode
+            if (!isFullscreen) {
                 LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .navigationBarsPadding(),
                     contentPadding = PaddingValues(bottom = 32.dp)
                 ) {
                 uiState.detail?.let { detail ->

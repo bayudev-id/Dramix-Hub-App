@@ -8,6 +8,9 @@ Format penulisan berpedoman pada [Keep a Changelog](https://keepachangelog.com/i
 ## [Unreleased]
 
 ### Added
+- **Fallback Placeholder Gambar Pencarian (`SearchResultGrid.kt`)**: Menambahkan listener error handling pada Coil `ImageRequest` dan merender kartu cadangan dengan ikon `Icons.Default.Movie` berwarna slate ketika URL cover null, kosong, atau gagal dimuat oleh CDN.
+- **Skema Migrasi Subtitle Preferences (`PlayerPreferences.kt`)**: Menambahkan `KEY_SUBTITLE_CONFIG_VERSION` dengan mekanisme auto-migrasi (`CURRENT_SUBTITLE_VERSION = 2`) untuk menimpa preferensi usang dengan nilai default terstandarisasi.
+- **Short Edges Display Cutout (`MainActivity.kt`)**: Mengonfigurasi `layoutInDisplayCutoutMode = LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES` pada level window untuk memastikan konten video membentang langsung melintasi area kamera depan/notch tanpa komputasi tunda.
 - **Search Infinite Scroll Pagination**: Menambahkan dukungan infinite scrolling di `SearchScreen` yang setara dengan `HomeScreen`. Mengonsumsi field `has_more` dari response gateway, memicu auto-load page berikutnya saat mencapai 5 item dari batas bawah grid, melakukan deduplikasi ID secara otomatis, dan me-reset state pagination saat kata kunci atau provider berubah.
 - **Provider Priority Reordering**: Mengatur urutan prioritas resmi provider pada Search & Home:
   1. WeTV (`wetv`)
@@ -22,10 +25,20 @@ Format penulisan berpedoman pada [Keep a Changelog](https://keepachangelog.com/i
 - **Search Portrait Covers**: Mengaktifkan portrait cover display di search hasil. Aspect ratio 2:3 untuk drama/film, 9:16 untuk shorts. 15/24 provider dikonfirmasi ada cover data lengkap.
 
 ### Changed
+- **Standarisasi Default Subtitle Styling**:
+  - Fullscreen: Arial, Medium outline, Font Size 20px, Position 10%, Background Opacity 0%, Line Spacing 0px, Background Padding 0px, Text Color White (`0xFFFFFFFF`).
+  - Portrait: Arial, Medium outline, Font Size 14px, Position 10%, Background Opacity 0%, Line Spacing 0px, Background Padding 0px, Text Color White (`0xFFFFFFFF`).
+- **Granularitas Stepper Padding & Line Spacing Subtitle**: Menyesuaikan batas perubahan delta background padding dan line spacing menjadi 0px – 20px (step 1px) di `VodPlayerViewModel.kt` dan `PlayerSettingsMenu.kt`.
+- **Tuning Klien Gambar OkHttp (`OkHttpProvider.kt`)**: Menyesuaikan connect timeout menjadi 15s dan read timeout menjadi 25s, serta membatasi `maxRequestsPerHost = 16` guna mencegah stalling koneksi HTTP/2 pada domain cover pihak ketiga.
 - **Pembersihan Tab Search**: Menghapus tab filter tipe konten yang redundan ("Semua", "Drama", "Short", "Film", "Live TV") pada `SearchScreen.kt`.
 - **Standarisasi Visual Chip Provider**: Mengadopsi styling chip dari HomeScreen (`RoundedCornerShape(16.dp)`, aksen `CrimsonPlay`, background `MidnightCard`, border `MidnightBorder`).
 - **Integrasi Preferences pada Search**: Menghubungkan `ProviderPreferences` ke dalam `SearchViewModel` melalui DI Koin (`AppModule.kt`).
 - **Category Validation Fallback**: Auto-fallback ke kategori pertama jika `lastCategoryId` tidak valid/tidak ditemukan di provider baru (fix untuk HTTP 502 saat ganti provider).
+
+### Fixed
+- **Visual Stutter & Jeda Transisi Fullscreen Pertama Kali (`VodPlayerScreen.kt`)**: Menghilangkan unmount/re-inflate `VideoPlayerSurface` dengan menyatukan viewport pemutar ke dalam satu node pohon Compose persisten, mengubah modifier aspect ratio secara langsung tanpa memutus decoder hardware SurfaceView ExoPlayer.
+- **Constraint Padding `Scaffold` pada Rute Pemutar (`AppNavigation.kt`)**: Mem-bypass `innerPadding` bawaan Scaffold (di-set `PaddingValues(0.dp)`) ketika pengguna berada pada rute `vod_player`, mengeliminasi jeda animasi penyusutan System Bars saat rotasi landscape.
+- **Sinkronisasi Langsung Sembunyikan System Bars**: Mengeksekusi `insetsController.hide(systemBars())` secara sinkron langsung di dalam fungsi `toggleFullscreen()` alih-alih menunggunya di dalam `LaunchedEffect`.
 
 ---
 

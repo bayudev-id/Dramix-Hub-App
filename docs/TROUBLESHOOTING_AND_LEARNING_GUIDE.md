@@ -10,6 +10,8 @@ Dokumen ini mendokumentasikan secara rinci analisis akar masalah (*root cause an
 3. [Kasus 3: Pergeseran Alignment & Double Padding pada Jetpack Compose LazyRow](#kasus-3-pergeseran-alignment--double-padding-pada-jetpack-compose-lazyrow)
 4. [Kasus 4: Redundansi Entry Point & Bloated State Management (Provider Customizer)](#kasus-4-redundansi-entry-point--bloated-state-management-provider-customizer)
 5. [Kasus 5: Inadvertent Git Reset & Pencegahan Kehilangan Kode](#kasus-5-inadvertent-git-reset--pencegahan-kehilangan-kode)
+6. [Kasus 6: Visual Stutter & Lagging Transisi Fullscreen (Compose Unmount & Insets Race Condition)](#kasus-6-visual-stutter--lagging-transisi-fullscreen-compose-unmount--insets-race-condition)
+7. [Kasus 7: Migrasi Versioning Subtitle Preferences & Boundary Stepper Controls](#kasus-7-migrasi-versioning-subtitle-preferences--boundary-stepper-controls)
 
 ---
 
@@ -272,3 +274,160 @@ Sebelum perbaikan, sempat terjadi ketidaksengajaan `git reset` atau pergantian b
    ```
 4. **Push Teratur ke Remote**:
    Selalu sinkronkan branch utama ke remote repository (`git push origin <branch>`) setelah serangkaian pengujian perangkat fisik berhasil.
+
+---
+
+## Kasus 6: Visual Stutter & Lagging Transisi Fullscreen (Compose Unmount & Insets Race Condition)
+
+### Gejala Masalah
+Saat pengguna menekan tombol fullscreen pada pemutar video (`VodPlayerScreen`) untuk pertama kalinya:
+1. Layar sempat mengalami *glitch* visual / stutter selama 200–400 milidetik.
+2. Video tidak langsung memenuhi seluruh bentang layar secara instan, melainkan tertahan oleh padding atau blank frame sesaat sebelum akhirnya meluas penuh ke tepi display.
+3. Transisi berikutnya terasa lebih cepat daripada transisi pertama.
+
+### Akar Masalah (Root Cause)
+1. **Unmount & Re-inflate AndroidView/PlayerView (Penyebab Utama)**:
+   - Pada implementasi awal, `VideoPlayerSurface` diletakkan di dua cabang terpisah:
+     ```kotlin
+     if (isFullscreen) {
+         Box(Modifier.fillMaxSize()) {
+             VideoPlayerSurface(...)
+         }
+     } else {
+         Column {
+             Box(Modifier.aspectRatio(16f/9f)) {
+                 VideoPlayerSurface(...)
+             }
+         }
+     }
+     ```
+   - Ketika `isFullscreen` berubah dari `false` ke `true`, Jetpack Compose menafsirkan ini sebagai dua node yang berbeda. Node portrait di-*dispose* (memanggil pembersihan `player = null`), lalu node landscape baru di-*inflate* dari XML layout (`PlayerViewBinding.inflate`).
+   - Akibatnya, Media3/ExoPlayer terpaksa melepaskan hardware `SurfaceView`, mengalokasikan surface baru di GPU buffer, dan memasang ulang decoder. Ini memakan waktu CPU/GPU yang signifikan pada cold start.
+2. **Animasi Insets Global dari Scaffold (`innerPadding`)**:
+   - Di `AppNavigation.kt`, `NavHost` dibungkus dengan `Modifier.padding(innerPadding)`.
+   - `innerPadding` secara default mengonsumsi System Bars (Status Bar + Navigation Bar).
+   - Saat masuk mode fullscreen dan System Bars mulai di-hide, OS menganimasikan penyusutan System Bars dari ~30dp ke 0dp secara asinkron.
+   - Karena `NavHost` terikat pada `innerPadding`, seluruh layar VOD Player ikut tertahan dan tertekan selama animasi insets berlangsung.
+3. **Display Cutout (Notch) & Asynchronous Insets Controller**:
+   - Pemanggilan `insetsController.hide(WindowInsetsCompat.Type.systemBars())` awalnya ditaruh di dalam `LaunchedEffect(isFullscreen)`. `LaunchedEffect` berjalan setelah siklus komposisi pertama selesai, bukan instan saat klik tombol.
+   - Window belum mengonfigurasi `layoutInDisplayCutoutMode = LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES`, sehingga WindowManager Android harus melakukan komputasi penataan ulang boundary notch saat rotasi ke landscape.
+
+### Solusi & Implementasi Multi-Layer
+
+#### 1. Unified Player Viewport (`VodPlayerScreen.kt`)
+Satukan `VideoPlayerSurface`, `SubtitleOverlay`, dan `VodPlayerOverlay` ke dalam satu node yang persisten (tidak pernah di-unmount/dispose):
+```kotlin
+val activeSubtitleStyle = if (isFullscreen) uiState.fullscreenSubtitleStyle else uiState.portraitSubtitleStyle
+
+Column(
+    modifier = Modifier
+        .fillMaxSize()
+        .then(if (!isFullscreen) Modifier.statusBarsPadding() else Modifier)
+) {
+    Box(
+        modifier = if (isFullscreen) {
+            Modifier.fillMaxSize().background(Color.Black)
+        } else {
+            Modifier.fillMaxWidth().aspectRatio(16f / 9f).clipToBounds().background(Color.Black)
+        }
+    ) {
+        // Node ini tidak pernah di-destroy saat toggle fullscreen
+        VideoPlayerSurface(
+            player = viewModel.playerController.player,
+            modifier = Modifier.fillMaxSize(),
+            subtitleStyle = activeSubtitleStyle,
+            videoZoom = uiState.videoZoom
+        )
+        ...
+    }
+}
+```
+
+#### 2. Bypass `innerPadding` Scaffold untuk Route Player (`AppNavigation.kt`)
+Cegah `Scaffold` memberikan padding dinamis yang menganimasikan ukuran `NavHost` pada rute VOD Player:
+```kotlin
+val isVodPlayer = currentRoute?.startsWith("vod_player") == true
+
+NavHost(
+    navController = navController,
+    startDestination = Screen.Home.route,
+    modifier = Modifier
+        .fillMaxSize()
+        .padding(if (isVodPlayer) PaddingValues(0.dp) else innerPadding)
+        .background(PureBlack)
+)
+```
+
+#### 3. Sinkronisasi Instan & Short Edges Cutout (`MainActivity.kt` & `VodPlayerScreen.kt`)
+Izinkan window menembus area cutout/notch kamera dan sembunyikan System Bars seketika di callback klik:
+```kotlin
+// MainActivity.kt
+if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+    window.attributes.layoutInDisplayCutoutMode =
+        android.view.WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+}
+
+// VodPlayerScreen.kt
+fun toggleFullscreen() {
+    val target = !isFullscreen
+    isFullscreen = target
+    activity?.requestedOrientation = if (target) {
+        ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+    } else {
+        ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+    }
+    // Eksekusi langsung tanpa menunggu LaunchedEffect
+    activity?.window?.let { window ->
+        val insetsController = WindowCompat.getInsetsController(window, window.decorView)
+        insetsController.systemBarsBehavior =
+            WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        if (target) {
+            insetsController.hide(WindowInsetsCompat.Type.systemBars())
+        } else {
+            insetsController.show(WindowInsetsCompat.Type.systemBars())
+        }
+    }
+}
+```
+
+### Pencegahan ke Depan
+- **Jangan pernah membuat dua instance `AndroidView` untuk player/surface yang sama dalam percabangan kondisi UI (`if-else`)**. Gunakan satu instance dan ubah modifier layout-nya secara deklaratif.
+- **Waspadai `innerPadding` Scaffold pada layar Media/Player Edge-to-Edge**. Layar pemutar video harus mengelola insets secara mandiri.
+
+---
+
+## Kasus 7: Migrasi Versioning Subtitle Preferences & Boundary Stepper Controls
+
+### Gejala Masalah
+1. Pengaturan default subtitle baru (misal font Arial, outline medium, font size 20px / 14px, opacity 0%, line spacing 0px, bg padding 0px) tidak ter-apply pada perangkat yang sudah pernah menyimpan preferensi subtitle versi lama di SharedPreferences.
+2. Tombol stepper (-) dan (+) untuk `Background Padding` dan `Line Spacing` di menu pengaturan player sempat tidak merespons perubahan atau memiliki batas bawah yang tidak sesuai (misal padding tertahan di 8px bukannya bisa 0px).
+
+### Akar Masalah (Root Cause)
+1. **Ketiadaan Skema Migrasi Preferences**: `PlayerPreferences` memuat data lama dari SharedPreferences menggunakan default fallback hanya jika key belum pernah ada. Jika key sudah tersimpan dengan default versi sebelumnya, nilai lama tersebut terus dipakai.
+2. **Batasan Hardcoded pada Stepper**: Di `PlayerSettingsMenu.kt` dan `VodPlayerViewModel.kt`, nilai padding dibatasi dengan `coerceIn(8, 48)` bukannya rentang fleksibel `0` hingga `20`.
+3. **Ketiadaan Binding Callback**: Callback `onUpdateLineSpacing` dan `onUpdateBgPadding` belum terhubung sepenuhnya dari menu popover ke ViewModel di kedua mode portrait dan fullscreen.
+
+### Solusi & Implementasi
+1. **Skema Versioning di `PlayerPreferences.kt`**:
+   Tambahkan key `KEY_SUBTITLE_CONFIG_VERSION` dan konstanta `CURRENT_SUBTITLE_VERSION = 2`. Jika versi tersimpan lebih rendah, timpa preferensi lama dengan nilai default standar yang baru:
+   ```kotlin
+   private const val KEY_SUBTITLE_CONFIG_VERSION = "pref_subtitle_config_version"
+   private const val CURRENT_SUBTITLE_VERSION = 2
+
+   private fun migrateSubtitlePreferencesIfNeeded() {
+       val storedVersion = prefs.getInt(KEY_SUBTITLE_CONFIG_VERSION, 1)
+       if (storedVersion < CURRENT_SUBTITLE_VERSION) {
+           // Simpan default baru untuk fullscreen dan portrait
+           saveSubtitleConfig(SubtitleStyleConfig.DEFAULT_FULLSCREEN, isFullscreen = true)
+           saveSubtitleConfig(SubtitleStyleConfig.DEFAULT_PORTRAIT, isFullscreen = false)
+           prefs.edit().putInt(KEY_SUBTITLE_CONFIG_VERSION, CURRENT_SUBTITLE_VERSION).apply()
+       }
+   }
+   ```
+2. **Boundary Stepper 0–20px**:
+   Perbarui clamping delta update di `VodPlayerViewModel.kt`:
+   ```kotlin
+   val newPadding = (currentStyle.backgroundPadding + delta).coerceIn(0, 20)
+   val newLineSpacing = (currentStyle.lineSpacing + delta).coerceIn(0, 20)
+   ```
+3. **Penyambungan Callback**: Hubungkan callback `onUpdateLineSpacing` dan `onUpdateBgPadding` di `VodPlayerOverlay.kt` dan `VodPlayerScreen.kt` dengan parameter `isFullscreen`.

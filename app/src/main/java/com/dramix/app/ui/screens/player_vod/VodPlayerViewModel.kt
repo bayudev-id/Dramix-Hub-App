@@ -34,15 +34,15 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 data class SubtitleStyleConfig(
-    val fontSizePx: Int = 28,
+    val fontSizePx: Int = 20,
     val positionPercent: Int = 10,
-    val backgroundOpacityPercent: Int = 50,
-    val backgroundPaddingPx: Int = 16,
-    val lineSpacingPx: Int = 4,
+    val backgroundOpacityPercent: Int = 0,
+    val backgroundPaddingPx: Int = 0,
+    val lineSpacingPx: Int = 0,
     val textColor: Long = 0xFFFFFFFF,
     val baseBackgroundColor: Long = 0xFF000000,
     val fontFamily: String = "Arial",
-    val outlineStyle: String = "Thin"
+    val outlineStyle: String = "Medium"
 ) {
     val backgroundColor: Long
         get() {
@@ -83,9 +83,9 @@ data class VodPlayerUiState(
     val playbackSpeed: Float = 1.0f,
     val isAutoNext: Boolean = false,
     val videoZoom: String = "100%",
-    val portraitSubtitleStyle: SubtitleStyleConfig = SubtitleStyleConfig(fontSizePx = 20),
-    val fullscreenSubtitleStyle: SubtitleStyleConfig = SubtitleStyleConfig(fontSizePx = 28),
-    val subtitleStyle: SubtitleStyleConfig = SubtitleStyleConfig()
+    val portraitSubtitleStyle: SubtitleStyleConfig = SubtitleStyleConfig(fontSizePx = 14),
+    val fullscreenSubtitleStyle: SubtitleStyleConfig = SubtitleStyleConfig(fontSizePx = 20),
+    val subtitleStyle: SubtitleStyleConfig = SubtitleStyleConfig(fontSizePx = 14)
 )
 
 class VodPlayerViewModel(
@@ -119,9 +119,9 @@ class VodPlayerViewModel(
     private val _uiState = MutableStateFlow(
         run {
             val portraitStyle = playerPreferences?.getSubtitleStyle(isFullscreen = false)
-                ?: SubtitleStyleConfig(fontSizePx = 20)
+                ?: SubtitleStyleConfig(fontSizePx = 14)
             val fullscreenStyle = playerPreferences?.getSubtitleStyle(isFullscreen = true)
-                ?: SubtitleStyleConfig(fontSizePx = 28)
+                ?: SubtitleStyleConfig(fontSizePx = 20)
             VodPlayerUiState(
                 videoZoom = playerPreferences?.getVideoZoom() ?: "100%",
                 playbackSpeed = playerPreferences?.getPlaybackSpeed() ?: 1.0f,
@@ -817,13 +817,13 @@ class VodPlayerViewModel(
 
     fun updateSubtitleBackgroundPadding(delta: Int, isFullscreen: Boolean = true) {
         val current = getActiveSubtitleStyle(isFullscreen)
-        val newPadding = (current.backgroundPaddingPx + delta).coerceIn(8, 48)
+        val newPadding = (current.backgroundPaddingPx + delta).coerceIn(0, 20)
         persistSubtitleStyle(current.copy(backgroundPaddingPx = newPadding), isFullscreen)
     }
 
     fun setSubtitleBackgroundPadding(padding: Int, isFullscreen: Boolean = true) {
         val current = getActiveSubtitleStyle(isFullscreen)
-        persistSubtitleStyle(current.copy(backgroundPaddingPx = padding.coerceIn(8, 48)), isFullscreen)
+        persistSubtitleStyle(current.copy(backgroundPaddingPx = padding.coerceIn(0, 20)), isFullscreen)
     }
 
     fun downloadCurrentEpisode() {

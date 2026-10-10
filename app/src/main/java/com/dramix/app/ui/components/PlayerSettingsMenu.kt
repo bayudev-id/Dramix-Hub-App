@@ -547,8 +547,8 @@ private fun SubtitleStyleSubMenuContent(
             valueText = "${subtitleStyle.backgroundPaddingPx}px",
             onDecrement = { onUpdateBgPadding(-1) },
             onIncrement = { onUpdateBgPadding(1) },
-            canDecrement = subtitleStyle.backgroundPaddingPx > 8,
-            canIncrement = subtitleStyle.backgroundPaddingPx < 48
+            canDecrement = subtitleStyle.backgroundPaddingPx > 0,
+            canIncrement = subtitleStyle.backgroundPaddingPx < 20
         )
 
         // 7. Text Color Picker
