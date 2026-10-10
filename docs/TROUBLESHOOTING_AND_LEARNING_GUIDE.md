@@ -657,3 +657,87 @@ fun selectProvider(providerId: String) {
 
 ### Pencegahan ke Depan
 - **Orientasi-Aware State**: Properti pemutar yang memiliki preferensi ergonomis berbeda antara orientasi vertikal dan horizontal (seperti ukuran font subtitle, margin subtitle, dan rasio zoom video) wajib dipisahkan baik di tingkat UI state maupun persistence layer.
+
+---
+
+## Kasus 12: Urutan Episode Terbalik & Bug Episode Bernomor 0 pada KissKH (Falsy JavaScript Evaluation & Ascending Sort)
+
+### Gejala Masalah
+1. Drama pada provider KissKH menyajikan daftar episode terbalik: episode terbaru/terakhir berada di posisi paling atas/depan, sementara Episode 1 berada di urutan paling belakang. Akibatnya, pemutar otomatis memilih episode terbaru yang mungkin belum rilis.
+2. Pada drama yang memiliki episode prolog / Episode 0 (seperti *100 Days of Deception* yang memiliki episode 0, 1, dan 2), sistem salah membaca dan menampilkan Episode 0 sebagai Episode 3 (atau episode bernomor 1 ke atas).
+
+### Akar Masalah (Root Cause)
+1. **Upstream Descending Order**: API upstream KissKH (`/api/DramaList/Drama/{id}`) mengembalikan daftar episode dalam urutan descending (episode terbaru pertama).
+2. **Evaluasi Falsy pada Nilai 0 di JavaScript (`detail.pb.js`)**:
+   ```javascript
+   // Kode lama yang bermasalah:
+   number: parseInt(ep.number, 10) || (i + 1),
+   title: "Episode " + (ep.number || (i + 1))
+   ```
+   Di JavaScript, angka `0` bernilai *falsy*. Ketika `ep.number` adalah `0`, ekspresi `0 || (i + 1)` mengabaikan nilai 0 dan mengevaluasi ke index fallback `(i + 1)`. Pada array berisi 3 item di mana episode 0 berada di index ke-2, hasilnya menjadi `2 + 1 = 3`. Episode 0 pun hilang dan berganti nama menjadi "Episode 3".
+
+### Solusi & Implementasi Multi-Layer
+1. **Sorting Ascending Terstandarisasi (`detail.pb.js` & `CatalogRepositoryImpl.kt`)**:
+   Urutkan array episode berdasarkan nilai numerik `number` sebelum proses pemetaan:
+   ```javascript
+   rawEps.sort(function(a, b) {
+       var numA = (a && a.number !== undefined && a.number !== null && !isNaN(Number(a.number)))
+           ? Number(a.number) : 999999;
+       var numB = (b && b.number !== undefined && b.number !== null && !isNaN(Number(b.number)))
+           ? Number(b.number) : 999999;
+       return numA - numB;
+   });
+   ```
+2. **Validasi Numerik Eksplisit (Preservasi Episode 0)**:
+   Gunakan pengecekan eksplisit `ep.number !== undefined && !isNaN(Number(ep.number))` agar angka 0 tidak dianggap falsy.
+3. **Penyortiran Sisi Klien (`CatalogRepositoryImpl.kt`)**:
+   Sebagai perlindungan berlapis, repository Android menyortir kembali daftar episode secara ascending:
+   ```kotlin
+   if (modelId.equals("kisskh", ignoreCase = true)) {
+       val sortedSeasons = domain.seasons.map { season ->
+           season.copy(
+               episodes = season.episodes.sortedWith(
+                   compareBy<Episode> { it.number }.thenBy { it.id }
+               )
+           )
+       }
+       domain.copy(seasons = sortedSeasons)
+   }
+   ```
+
+### Pencegahan ke Depan
+- **Hindari Logical OR (`||`) untuk Angka di JavaScript**: Jangan pernah gunakan operator `||` untuk menetapkan nilai default jika tipe data adalah angka, karena `0` akan tereliminasi secara keliru. Gunakan operator nullish coalescing (`??`) atau validasi eksplisit `!== undefined && !== null`.
+
+---
+
+## Kasus 13: Error ExoPlayer UnrecognizedInputFormatException pada Episode Ongoing KissKH (Countdown Timer Widget vs Video Stream)
+
+### Gejala Masalah
+1. Saat pengguna memutar episode drama KissKH yang masih berlangsung/ongoing dan belum dirilis resminya, pemutar video crash/error menampilkan pesan:
+   `UnrecognizedInputFormatException: None of the available extractors (FlvExtractor, FlacExtractor, WavExtractor, ...) could read the stream`.
+2. Pengguna tidak mendapatkan informasi kapan episode tersebut akan tayang, melainkan hanya layar hitam dengan dialog error pemutaran video.
+
+### Akar Masalah (Root Cause)
+1. **Penyatuan Stream URL Timer**: Pada API KissKH, episode yang belum dirilis mengembalikan data dengan `Type = 2` atau URL video yang mengarah ke widget countdown pihak ketiga (`https://www.tickcounter.com/widget/countdown/...`).
+2. **ExoPlayer Membaca HTML Widget sebagai Video Media**: Gateway sebelumnya memasukkan URL widget ini ke dalam array `streams` dengan format `m3u8`. Akibatnya, ExoPlayer mencoba mengunduh halaman web HTML tersebut dan menganggapnya sebagai chunk kontainer media HLS, memicu kegagalan extractor.
+
+### Solusi & Implementasi Multi-Layer
+1. **Deteksi Countdown Stream di Backend Gateway (`streamController.js` & `source.pb.js`)**:
+   Pisahkan URL timer dari list stream video playable:
+   ```javascript
+   const isTimer = streamData.Type === 2 || 
+                   rawUrl.includes('tickcounter.com') || 
+                   rawUrl.includes('countdown');
+   if (isTimer) {
+       countdownUrl = rawUrl;
+       isCountdown = true;
+       // JANGAN masukkan ke dalam array streams
+   }
+   ```
+2. **Deteksi Sisi Klien di Repository Android (`CatalogRepositoryImpl.kt`)**:
+   Tangkap URL timer jika lolos ke respons client dan tandai `isCountdown = true`.
+3. **Komponen Khusus `VodPlayerCountdownOverlay.kt`**:
+   Rancang overlay elegan di layar pemutar yang memuat WebView widget TickCounter secara langsung, menyembunyikan kontrol pemutaran video (karena tidak ada video yang diputar), dan menyertakan tombol "Cek Ketersediaan" (*Refresh*) agar pengguna dapat memeriksa rilis episode sewaktu-waktu.
+
+### Pencegahan ke Depan
+- **Validasi Format Stream Sebelum Dikirim ke Pemutar**: Pastikan URL stream media yang diteruskan ke ExoPlayer benar-benar merupakan manifest media (.m3u8, .mpd) atau file kontainer (.mp4), bukan URL halaman web atau widget embedding.

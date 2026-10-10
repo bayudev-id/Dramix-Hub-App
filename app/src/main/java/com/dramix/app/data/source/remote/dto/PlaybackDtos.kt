@@ -10,7 +10,9 @@ data class PlaybackSourceDataDto(
     @Json(name = "duration_seconds") val durationSeconds: Int? = null,
     @Json(name = "streams") val streams: List<StreamDto> = emptyList(),
     @Json(name = "subtitles") val subtitles: List<SubtitleDto> = emptyList(),
-    @Json(name = "headers") val headers: Map<String, String>? = null
+    @Json(name = "headers") val headers: Map<String, String>? = null,
+    @Json(name = "countdown_url") val countdownUrl: String? = null,
+    @Json(name = "is_countdown") val isCountdown: Boolean = false
 )
 
 @JsonClass(generateAdapter = true)

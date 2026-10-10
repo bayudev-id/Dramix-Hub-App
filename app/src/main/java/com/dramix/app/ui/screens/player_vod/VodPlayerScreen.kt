@@ -288,10 +288,26 @@ fun VodPlayerScreen(
                     onUpdateTextColor = { color -> viewModel.updateSubtitleTextColor(color, isFullscreen = isFullscreen) },
                     onUpdateBgColor = { color -> viewModel.updateSubtitleBgColor(color, isFullscreen = isFullscreen) },
                     onUpdateLineSpacing = { delta -> viewModel.updateSubtitleLineSpacing(delta, isFullscreen = isFullscreen) },
-                    onUpdateBgPadding = { delta -> viewModel.updateSubtitleBackgroundPadding(delta, isFullscreen = isFullscreen) }
+                    onUpdateBgPadding = { delta -> viewModel.updateSubtitleBackgroundPadding(delta, isFullscreen = isFullscreen) },
+                    isCountdown = uiState.isCountdown
                 )
 
-                if (uiState.errorMessage != null && !uiState.isLoadingPlayback && uiState.rentalBlockedEpisode == null) {
+                if (uiState.isCountdown) {
+                    com.dramix.app.ui.components.VodPlayerCountdownOverlay(
+                        dramaTitle = dramaTitle,
+                        episodeTitle = episodeTitle,
+                        countdownUrl = uiState.countdownUrl,
+                        isFullscreen = isFullscreen,
+                        isRefreshing = uiState.isRefreshing,
+                        onNavigateBack = {
+                            if (isFullscreen) toggleFullscreen() else onNavigateBack()
+                        },
+                        onToggleFullscreen = { toggleFullscreen() },
+                        onRefresh = { viewModel.refreshCurrentEpisode() }
+                    )
+                }
+
+                if (uiState.errorMessage != null && !uiState.isLoadingPlayback && uiState.rentalBlockedEpisode == null && !uiState.isCountdown) {
                     VodPlayerErrorOverlay(
                         errorMessage = uiState.errorMessage!!,
                         onRetry = { viewModel.refreshCurrentEpisode() }

@@ -78,4 +78,40 @@ class EpisodeTest {
         )
         assertFalse(episode.isSewa)
     }
+
+    @Test
+    fun `episode with number 0 retains number 0`() {
+        val episode0 = Episode(
+            id = "ep_0",
+            title = "Episode 0",
+            number = 0
+        )
+        org.junit.Assert.assertEquals(0, episode0.number)
+    }
+
+    @Test
+    fun `episodes sorted ascending order places episode 0 first then episode 1`() {
+        val rawEpisodes = listOf(
+            Episode(id = "ep_2", title = "Episode 2", number = 2),
+            Episode(id = "ep_1", title = "Episode 1", number = 1),
+            Episode(id = "ep_0", title = "Episode 0", number = 0)
+        )
+        val sorted = rawEpisodes.sortedWith(compareBy<Episode> { it.number }.thenBy { it.id })
+        org.junit.Assert.assertEquals(0, sorted[0].number)
+        org.junit.Assert.assertEquals(1, sorted[1].number)
+        org.junit.Assert.assertEquals(2, sorted[2].number)
+    }
+
+    @Test
+    fun `episodes starting at 1 sorted ascending order places episode 1 first`() {
+        val rawEpisodes = listOf(
+            Episode(id = "ep_3", title = "Episode 3", number = 3),
+            Episode(id = "ep_1", title = "Episode 1", number = 1),
+            Episode(id = "ep_2", title = "Episode 2", number = 2)
+        )
+        val sorted = rawEpisodes.sortedWith(compareBy<Episode> { it.number }.thenBy { it.id })
+        org.junit.Assert.assertEquals(1, sorted[0].number)
+        org.junit.Assert.assertEquals(2, sorted[1].number)
+        org.junit.Assert.assertEquals(3, sorted[2].number)
+    }
 }

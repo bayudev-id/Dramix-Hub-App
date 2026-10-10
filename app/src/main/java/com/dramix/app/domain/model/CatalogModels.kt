@@ -116,7 +116,9 @@ data class PlaybackSource(
     val durationSeconds: Int? = null,
     val streams: List<StreamSource> = emptyList(),
     val subtitles: List<Subtitle> = emptyList(),
-    val headers: Map<String, String> = emptyMap()
+    val headers: Map<String, String> = emptyMap(),
+    val countdownUrl: String? = null,
+    val isCountdown: Boolean = false
 )
 
 data class StreamSource(

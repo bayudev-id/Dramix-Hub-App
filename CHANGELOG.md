@@ -8,6 +8,11 @@ Format penulisan berpedoman pada [Keep a Changelog](https://keepachangelog.com/i
 ## [Unreleased]
 
 ### Added
+- **Widget Countdown Timer untuk Episode Ongoing/Belum Rilis (`VodPlayerCountdownOverlay.kt`, `VodPlayerScreen.kt`)**:
+  - Menghadirkan overlay pemutar khusus saat episode drama masih berstatus ongoing dan upstream menyediakan widget hitung mundur (seperti TickCounter).
+  - Menyematkan `WebView` terisolasi dengan latar belakang transparan/gelap untuk merender countdown timer secara langsung di dalam area pemutar, dilengkapi tombol "Cek Ketersediaan" (refresh).
+  - Mengintegrasikan flag `isCountdown` dan URL `countdownUrl` pada `PlaybackSourceDataDto`, `PlaybackSource`, dan `VodPlayerUiState`.
+  - Mengadaptasi `VodPlayerOverlay` agar menyembunyikan kontrol pemutaran tengah dan seekbar scrub saat mode countdown aktif, sementara navigasi atas (kembali, judul) dan toggle fullscreen tetap dapat diakses.
 - **Pemisahan Preferensi & State Video Zoom Portrait vs Fullscreen (`PlayerPreferences.kt`, `VodPlayerViewModel.kt`, `VodPlayerScreen.kt`)**:
   - Memisahkan persistensi zoom video ke dalam key terisolasi (`pref_video_zoom_portrait` dan `pref_video_zoom_fullscreen`) dengan fallback kompatibel ke key legacy `pref_video_zoom`.
   - Memisahkan state UI pemutar di `VodPlayerUiState` (`portraitVideoZoom` dan `fullscreenVideoZoom`) sehingga pengaturan pembesaran layar di mode portrait tidak menimpa pengaturan di mode fullscreen landscape.
@@ -46,6 +51,14 @@ Format penulisan berpedoman pada [Keep a Changelog](https://keepachangelog.com/i
 - **Category Validation Fallback**: Auto-fallback ke kategori pertama jika `lastCategoryId` tidak valid/tidak ditemukan di provider baru (fix untuk HTTP 502 saat ganti provider).
 
 ### Fixed
+- **Urutan Episode KissKH Ascending & Dimulai dari Episode Awal (0 atau 1) (`detail.pb.js`, `CatalogRepositoryImpl.kt`)**:
+  - Menyortir urutan episode KissKH secara ascending berdasarkan nomor episode sehingga Episode 1 (atau Episode 0) selalu berada di depan dan diputar pertama kali, alih-alih terbalik dengan episode terbaru/belum rilis di awal.
+  - Memperbaiki bug konversi JavaScript di `detail.pb.js` di mana `0 || (i + 1)` menganggap episode bernomor 0 sebagai falsy dan mengubahnya menjadi episode terakhir ("Episode 3"). Kini nilai 0 dipertahankan dengan validasi numerik eksplisit.
+- **Pencegahan Error Parsing Media Container pada Episode Countdown (`streamController.js`, `source.pb.js`, `CatalogRepositoryImpl.kt`)**:
+  - Mengeliminasi error ExoPlayer `UnrecognizedInputFormatException` yang terjadi akibat pemutar mencoba mem-parsing URL widget countdown (TickCounter) sebagai video stream m3u8.
+  - Mendeteksi tipe stream timer dan mengisolasinya ke field `countdown_url` / `is_countdown` baik di level gateway maupun fallback client repository.
+- **Koreksi Tanda Kunci VIP pada Daftar Episode (`AdaptiveEpisodeList.kt`)**:
+  - Menghapus pengecekan hardcoded `episode.number >= 4` yang sebelumnya menyebabkan episode reguler gratis berurutan 4 ke atas pada KissKH menampilkan ikon gembok VIP padahal `isVip` bernilai false.
 - **Shimmer Layout Shift KissKH & Live TV (`HomeScreen.kt`)**: Menyesuaikan `FeedShimmerGrid` agar secara adaptif mengenali provider `kisskh` atau tipe konten `live_tv` dan merender grid shimmer 2-kolom dengan aspect ratio landscape 16:9 alih-alih 3-kolom portrait 2:3, mengeliminasi kedipan pergeseran layout (layout shift) saat feed selesai dimuat.
 - **Visual Stutter & Jeda Transisi Fullscreen Pertama Kali (`VodPlayerScreen.kt`)**: Menghilangkan unmount/re-inflate `VideoPlayerSurface` dengan menyatukan viewport pemutar ke dalam satu node pohon Compose persisten, mengubah modifier aspect ratio secara langsung tanpa memutus decoder hardware SurfaceView ExoPlayer.
 - **Constraint Padding `Scaffold` pada Rute Pemutar (`AppNavigation.kt`)**: Mem-bypass `innerPadding` bawaan Scaffold (di-set `PaddingValues(0.dp)`) ketika pengguna berada pada rute `vod_player`, mengeliminasi jeda animasi penyusutan System Bars saat rotasi landscape.

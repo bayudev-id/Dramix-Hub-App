@@ -118,7 +118,7 @@ fun AdaptiveEpisodeList(
                                         .align(Alignment.TopEnd)
                                         .padding(top = 4.dp, end = 4.dp)
                                 )
-                            } else if (episode.isVip || episode.number >= 4) {
+                            } else if (episode.isVip) {
                                 Icon(
                                     imageVector = Icons.Default.Lock,
                                     contentDescription = "VIP",
@@ -174,7 +174,7 @@ private fun EpisodeThumbnailCard(
 
             if (episode.isSewa) {
                 SewaBadge(modifier = Modifier.align(Alignment.TopEnd))
-            } else if (episode.isVip || episode.number >= 4) {
+            } else if (episode.isVip) {
                 Box(
                     modifier = Modifier
                         .align(Alignment.TopEnd)

@@ -127,6 +127,7 @@ fun VodPlayerOverlay(
     onUpdateBgPadding: (Int) -> Unit = {},
     onUpdateTextColor: (Long) -> Unit = {},
     onUpdateBgColor: (Long) -> Unit = {},
+    isCountdown: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -448,118 +449,120 @@ fun VodPlayerOverlay(
 
                 // CENTER CONTROLS (Prev Episode, Rewind 10s, Play/Pause with Buffering, Forward 10s, Next Episode)
                 // Tombol tetap muncul meskipun loading agar user bisa combo +10s / -10s
-                Row(
-                    modifier = Modifier
-                        .align(Alignment.Center)
-                        .fillMaxWidth(),
-                    horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    // Previous Episode (hanya ditampilkan saat fullscreen landscape)
-                    if (isFullscreen) {
+                if (!isCountdown) {
+                    Row(
+                        modifier = Modifier
+                            .align(Alignment.Center)
+                            .fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // Previous Episode (hanya ditampilkan saat fullscreen landscape)
+                        if (isFullscreen) {
+                            IconButton(
+                                onClick = {
+                                    onPlayPreviousEpisode()
+                                    registerInteraction()
+                                },
+                                enabled = hasPreviousEpisode,
+                                modifier = Modifier.size(44.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.SkipPrevious,
+                                    contentDescription = "Episode Sebelumnya",
+                                    tint = if (hasPreviousEpisode) Color.White else Color.White.copy(alpha = 0.35f),
+                                    modifier = Modifier.size(30.dp)
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.width(20.dp))
+                        }
+
+                        // Rewind 10s (-10)
                         IconButton(
                             onClick = {
-                                onPlayPreviousEpisode()
-                                registerInteraction()
+                                applySeekDelta(-10_000L)
                             },
-                            enabled = hasPreviousEpisode,
                             modifier = Modifier.size(44.dp)
                         ) {
                             Icon(
-                                imageVector = Icons.Filled.SkipPrevious,
-                                contentDescription = "Episode Sebelumnya",
-                                tint = if (hasPreviousEpisode) Color.White else Color.White.copy(alpha = 0.35f),
-                                modifier = Modifier.size(30.dp)
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.width(20.dp))
-                    }
-
-                    // Rewind 10s (-10)
-                    IconButton(
-                        onClick = {
-                            applySeekDelta(-10_000L)
-                        },
-                        modifier = Modifier.size(44.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Filled.Replay10,
-                            contentDescription = "Mundur 10 detik",
-                            tint = Color.White,
-                            modifier = Modifier.size(32.dp)
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.width(if (isFullscreen) 20.dp else 36.dp))
-
-                    // Play/Pause Center Button with Loading Spinner
-                    Box(
-                        modifier = Modifier.size(56.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        if (isBuffering) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(56.dp),
-                                color = CrimsonPlay,
-                                strokeWidth = 3.dp
-                            )
-                        }
-                        Box(
-                            modifier = Modifier
-                                .size(48.dp)
-                                .clip(CircleShape)
-                                .background(Color.Black.copy(alpha = 0.5f))
-                                .clickable {
-                                    onTogglePlayPause()
-                                    registerInteraction()
-                                },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
-                                contentDescription = if (isPlaying) "Jeda" else "Putar",
+                                imageVector = Icons.Filled.Replay10,
+                                contentDescription = "Mundur 10 detik",
                                 tint = Color.White,
                                 modifier = Modifier.size(32.dp)
                             )
                         }
-                    }
 
-                    Spacer(modifier = Modifier.width(if (isFullscreen) 20.dp else 36.dp))
+                        Spacer(modifier = Modifier.width(if (isFullscreen) 20.dp else 36.dp))
 
-                    // Forward 10s (+10)
-                    IconButton(
-                        onClick = {
-                            applySeekDelta(10_000L)
-                        },
-                        modifier = Modifier.size(44.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Filled.Forward10,
-                            contentDescription = "Maju 10 detik",
-                            tint = Color.White,
-                            modifier = Modifier.size(32.dp)
-                        )
-                    }
+                        // Play/Pause Center Button with Loading Spinner
+                        Box(
+                            modifier = Modifier.size(56.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (isBuffering) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(56.dp),
+                                    color = CrimsonPlay,
+                                    strokeWidth = 3.dp
+                                )
+                            }
+                            Box(
+                                modifier = Modifier
+                                    .size(48.dp)
+                                    .clip(CircleShape)
+                                    .background(Color.Black.copy(alpha = 0.5f))
+                                    .clickable {
+                                        onTogglePlayPause()
+                                        registerInteraction()
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                                    contentDescription = if (isPlaying) "Jeda" else "Putar",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(32.dp)
+                                )
+                            }
+                        }
 
-                    // Next Episode (hanya ditampilkan saat fullscreen landscape)
-                    if (isFullscreen) {
-                        Spacer(modifier = Modifier.width(20.dp))
+                        Spacer(modifier = Modifier.width(if (isFullscreen) 20.dp else 36.dp))
 
+                        // Forward 10s (+10)
                         IconButton(
                             onClick = {
-                                onPlayNextEpisode()
-                                registerInteraction()
+                                applySeekDelta(10_000L)
                             },
-                            enabled = hasNextEpisode,
                             modifier = Modifier.size(44.dp)
                         ) {
                             Icon(
-                                imageVector = Icons.Filled.SkipNext,
-                                contentDescription = "Episode Selanjutnya",
-                                tint = if (hasNextEpisode) Color.White else Color.White.copy(alpha = 0.35f),
-                                modifier = Modifier.size(30.dp)
+                                imageVector = Icons.Filled.Forward10,
+                                contentDescription = "Maju 10 detik",
+                                tint = Color.White,
+                                modifier = Modifier.size(32.dp)
                             )
+                        }
+
+                        // Next Episode (hanya ditampilkan saat fullscreen landscape)
+                        if (isFullscreen) {
+                            Spacer(modifier = Modifier.width(20.dp))
+
+                            IconButton(
+                                onClick = {
+                                    onPlayNextEpisode()
+                                    registerInteraction()
+                                },
+                                enabled = hasNextEpisode,
+                                modifier = Modifier.size(44.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.SkipNext,
+                                    contentDescription = "Episode Selanjutnya",
+                                    tint = if (hasNextEpisode) Color.White else Color.White.copy(alpha = 0.35f),
+                                    modifier = Modifier.size(30.dp)
+                                )
+                            }
                         }
                     }
                 }
@@ -584,69 +587,73 @@ fun VodPlayerOverlay(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // Current Playback Time (e.g. "02:04")
-                        Text(
-                            text = formatPlaybackTime(displayedPosition, durationMs),
-                            color = Color.White,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-
-                        Spacer(modifier = Modifier.width(10.dp))
-
-                        // Sleek Thin Seekbar matching Image 2
-                        ThinVideoSeekBar(
-                            positionMs = displayedPosition,
-                            durationMs = durationMs,
-                            onSeekStarted = {
-                                isScrubbing = true
-                                optimisticSeekPositionMs = null
-                                scrubPositionMs = displayedPosition
-                                registerInteraction()
-                            },
-                            onSeekProgress = { progressMs ->
-                                scrubPositionMs = progressMs
-                                registerInteraction()
-                            },
-                            onSeekFinished = { finalPositionMs ->
-                                isScrubbing = false
-                                optimisticSeekPositionMs = finalPositionMs
-                                onSeekTo(finalPositionMs)
-                                registerInteraction()
-                            },
-                            modifier = Modifier.weight(1f)
-                        )
-
-                        Spacer(modifier = Modifier.width(10.dp))
-
-                        // Total Duration (e.g. "45:30")
-                        Text(
-                            text = formatPlaybackTime(durationMs, durationMs),
-                            color = Color.White.copy(alpha = 0.8f),
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Normal
-                        )
-
-                        Spacer(modifier = Modifier.width(6.dp))
-
-                        // Settings Icon: Opens settings menu matching Image 3
-                        IconButton(
-                            onClick = {
-                                if (isSettingsOpen) {
-                                    onDismissSettings()
-                                } else {
-                                    onOpenSettings()
-                                }
-                                registerInteraction()
-                            },
-                            modifier = Modifier.size(36.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Filled.Settings,
-                                contentDescription = "Pengaturan",
-                                tint = if (isSettingsOpen) CrimsonPlay else Color.White,
-                                modifier = Modifier.size(20.dp)
+                        if (!isCountdown) {
+                            // Current Playback Time (e.g. "02:04")
+                            Text(
+                                text = formatPlaybackTime(displayedPosition, durationMs),
+                                color = Color.White,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold
                             )
+
+                            Spacer(modifier = Modifier.width(10.dp))
+
+                            // Sleek Thin Seekbar matching Image 2
+                            ThinVideoSeekBar(
+                                positionMs = displayedPosition,
+                                durationMs = durationMs,
+                                onSeekStarted = {
+                                    isScrubbing = true
+                                    optimisticSeekPositionMs = null
+                                    scrubPositionMs = displayedPosition
+                                    registerInteraction()
+                                },
+                                onSeekProgress = { progressMs ->
+                                    scrubPositionMs = progressMs
+                                    registerInteraction()
+                                },
+                                onSeekFinished = { finalPositionMs ->
+                                    isScrubbing = false
+                                    optimisticSeekPositionMs = finalPositionMs
+                                    onSeekTo(finalPositionMs)
+                                    registerInteraction()
+                                },
+                                modifier = Modifier.weight(1f)
+                            )
+
+                            Spacer(modifier = Modifier.width(10.dp))
+
+                            // Total Duration (e.g. "45:30")
+                            Text(
+                                text = formatPlaybackTime(durationMs, durationMs),
+                                color = Color.White.copy(alpha = 0.8f),
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Normal
+                            )
+
+                            Spacer(modifier = Modifier.width(6.dp))
+
+                            // Settings Icon: Opens settings menu matching Image 3
+                            IconButton(
+                                onClick = {
+                                    if (isSettingsOpen) {
+                                        onDismissSettings()
+                                    } else {
+                                        onOpenSettings()
+                                    }
+                                    registerInteraction()
+                                },
+                                modifier = Modifier.size(36.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.Settings,
+                                    contentDescription = "Pengaturan",
+                                    tint = if (isSettingsOpen) CrimsonPlay else Color.White,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        } else {
+                            Spacer(modifier = Modifier.weight(1f))
                         }
 
                         // Fullscreen Toggle Button

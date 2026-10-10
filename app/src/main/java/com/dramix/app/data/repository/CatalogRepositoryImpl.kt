@@ -64,7 +64,19 @@ class CatalogRepositoryImpl(
     override suspend fun getDramaDetail(modelId: String, id: String): Result<DramaDetail> = runCatching {
         val response = apiService.getDetail(modelId, id)
         val data = response.data ?: throw IllegalStateException("Detail data is null for $id")
-        data.toDomain()
+        val domain = data.toDomain()
+        if (modelId.equals("kisskh", ignoreCase = true)) {
+            val sortedSeasons = domain.seasons.map { season ->
+                season.copy(
+                    episodes = season.episodes.sortedWith(
+                        compareBy<Episode> { it.number }.thenBy { it.id }
+                    )
+                )
+            }
+            domain.copy(seasons = sortedSeasons)
+        } else {
+            domain
+        }
     }
 
     override suspend fun getPlaybackSource(
@@ -184,14 +196,35 @@ class CatalogRepositoryImpl(
         tags = tags ?: emptyList()
     )
 
-    private fun PlaybackSourceDataDto.toDomain(fallbackEpisodeId: String) = PlaybackSource(
-        id = id ?: fallbackEpisodeId,
-        episodeId = episodeId ?: fallbackEpisodeId,
-        durationSeconds = durationSeconds,
-        streams = streams?.map { it.toDomain() } ?: emptyList(),
-        subtitles = subtitles?.map { it.toDomain() } ?: emptyList(),
-        headers = headers ?: emptyMap()
-    )
+    private fun PlaybackSourceDataDto.toDomain(fallbackEpisodeId: String): PlaybackSource {
+        val rawStreams = streams ?: emptyList()
+        val detectedCountdownStream = rawStreams.firstOrNull {
+            it.format.equals("countdown", ignoreCase = true) ||
+            it.url.contains("tickcounter.com", ignoreCase = true) ||
+            it.url.contains("countdown", ignoreCase = true)
+        }
+        val finalIsCountdown = isCountdown || (detectedCountdownStream != null)
+        val finalCountdownUrl = countdownUrl ?: detectedCountdownStream?.url
+
+        val validStreams = rawStreams
+            .filterNot {
+                it.format.equals("countdown", ignoreCase = true) ||
+                it.url.contains("tickcounter.com", ignoreCase = true) ||
+                it.url.contains("countdown", ignoreCase = true)
+            }
+            .map { it.toDomain() }
+
+        return PlaybackSource(
+            id = id ?: fallbackEpisodeId,
+            episodeId = episodeId ?: fallbackEpisodeId,
+            durationSeconds = durationSeconds,
+            streams = validStreams,
+            subtitles = subtitles?.map { it.toDomain() } ?: emptyList(),
+            headers = headers ?: emptyMap(),
+            countdownUrl = finalCountdownUrl,
+            isCountdown = finalIsCountdown
+        )
+    }
 
     private fun StreamDto.toDomain() = StreamSource(
         quality = quality,

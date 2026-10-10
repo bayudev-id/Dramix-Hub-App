@@ -104,7 +104,7 @@ data class SeasonDto(
 data class EpisodeDto(
     @Json(name = "id") val id: String,
     @Json(name = "title") val title: String? = null,
-    @Json(name = "number") val number: Int = 1,
+    @Json(name = "number") val number: Int? = 1,
     @Json(name = "cover") val cover: String? = null,
     @Json(name = "duration_seconds") val durationSeconds: Int? = null,
     @Json(name = "is_vip") val isVip: Boolean = false,

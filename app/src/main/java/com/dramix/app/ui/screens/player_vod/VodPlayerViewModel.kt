@@ -85,6 +85,8 @@ data class VodPlayerUiState(
     val videoZoom: String = "100%",
     val portraitVideoZoom: String = "100%",
     val fullscreenVideoZoom: String = "100%",
+    val isCountdown: Boolean = false,
+    val countdownUrl: String? = null,
     val portraitSubtitleStyle: SubtitleStyleConfig = SubtitleStyleConfig(fontSizePx = 14),
     val fullscreenSubtitleStyle: SubtitleStyleConfig = SubtitleStyleConfig(fontSizePx = 20),
     val subtitleStyle: SubtitleStyleConfig = SubtitleStyleConfig(fontSizePx = 14)
@@ -338,6 +340,8 @@ class VodPlayerViewModel(
             currentSeasonIndex = newSeasonIndex,
             showLicenseGate = false,
             isLoadingPlayback = true,
+            isCountdown = false,
+            countdownUrl = null,
             errorMessage = null,
             initialPositionMs = 0L,
             prefilledDurationMs = initialEstimateDuration
@@ -412,7 +416,20 @@ class VodPlayerViewModel(
             }
 
             val source = sourceResult.getOrThrow()
-            android.util.Log.d("VodPlayer", "Source loaded: streams=${source.streams.size}, subs=${source.subtitles.size}")
+            android.util.Log.d("VodPlayer", "Source loaded: streams=${source.streams.size}, subs=${source.subtitles.size}, countdown=${source.isCountdown}")
+
+            if (source.isCountdown) {
+                playerController.pause()
+                _uiState.value = _uiState.value.copy(
+                    isLoadingPlayback = false,
+                    playbackSource = source,
+                    isCountdown = true,
+                    countdownUrl = source.countdownUrl,
+                    errorMessage = null
+                )
+                return@launch
+            }
+
             val stream = source.streams.firstOrNull()
 
             if (stream == null) {
@@ -924,6 +941,18 @@ class VodPlayerViewModel(
                 
                 if (sourceResult.isSuccess) {
                     val source = sourceResult.getOrThrow()
+                    if (source.isCountdown) {
+                        playerController.pause()
+                        _uiState.value = _uiState.value.copy(
+                            playbackSource = source,
+                            isCountdown = true,
+                            countdownUrl = source.countdownUrl,
+                            rentalBlockedEpisode = null,
+                            errorMessage = null,
+                            isRefreshing = false
+                        )
+                        return@launch
+                    }
                     val stream = source.streams.firstOrNull()
                     
                     if (stream != null) {

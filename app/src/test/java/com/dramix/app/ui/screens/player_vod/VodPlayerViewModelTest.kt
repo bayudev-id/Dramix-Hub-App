@@ -475,4 +475,54 @@ class VodPlayerViewModelTest {
             viewModel.release()
         }
     }
+
+    @Test
+    fun vodPlayer_handles_countdown_episode_gracefully() = runTest {
+        val watchHistoryDao = FakeWatchHistoryDao()
+        val bookmarkDao = FakeBookmarkDao()
+        val licenseRepository = FakeLicenseRepository(vipActive = true)
+        val entitlementManager = EntitlementManager(licenseRepository)
+
+        val countdownRepo = object : CatalogRepository {
+            override suspend fun getProviders(): Result<List<ProviderModel>> = Result.success(emptyList())
+            override suspend fun getCategories(modelId: String): Result<List<Category>> = Result.success(emptyList())
+            override suspend fun getVideos(modelId: String, categoryId: String, page: Int): Result<List<VideoItem>> = Result.success(emptyList())
+            override suspend fun getDramaDetail(modelId: String, id: String): Result<DramaDetail> = Result.success(mockDetail)
+            override suspend fun getPlaybackSource(modelId: String, episodeId: String, id: String?): Result<PlaybackSource> = Result.success(
+                PlaybackSource(
+                    id = id ?: episodeId,
+                    episodeId = episodeId,
+                    durationSeconds = 0,
+                    streams = emptyList(),
+                    subtitles = emptyList(),
+                    countdownUrl = "https://www.tickcounter.com/widget/countdown/7618537",
+                    isCountdown = true
+                )
+            )
+            override suspend fun search(modelId: String, query: String, page: Int, contentType: String?): Result<List<VideoItem>> = Result.success(emptyList())
+        }
+
+        val viewModel = VodPlayerViewModel(
+            providerId = "kisskh",
+            dramaId = "13795",
+            catalogRepository = countdownRepo,
+            watchHistoryDao = watchHistoryDao,
+            bookmarkDao = bookmarkDao,
+            entitlementManager = entitlementManager,
+            licenseRepository = licenseRepository,
+            playerFactory = playerFactory,
+            enablePlayerCache = false
+        )
+
+        testDispatcher.scheduler.advanceTimeBy(1000)
+        testDispatcher.scheduler.runCurrent()
+
+        val state = viewModel.uiState.value
+        assertTrue(state.isCountdown)
+        assertEquals("https://www.tickcounter.com/widget/countdown/7618537", state.countdownUrl)
+        assertFalse(state.isLoadingPlayback)
+        org.junit.Assert.assertNull(state.errorMessage)
+
+        viewModel.release()
+    }
 }
