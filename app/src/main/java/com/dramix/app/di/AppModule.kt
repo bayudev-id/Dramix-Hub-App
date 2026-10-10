@@ -42,7 +42,7 @@ val coreModule = module {
     single { ProviderPreferences(androidContext()) }
 
     single {
-        val baseClient = OkHttpProvider.createClient(deviceIdentifier = get())
+        val baseClient = OkHttpProvider.createClient(context = androidContext(), deviceIdentifier = get())
         val authInterceptor = AuthInterceptor(licensePreferences = get())
         baseClient.newBuilder()
             .addInterceptor(authInterceptor)

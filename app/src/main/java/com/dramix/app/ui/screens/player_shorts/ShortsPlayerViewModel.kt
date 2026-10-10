@@ -98,9 +98,13 @@ class ShortsPlayerViewModel(
 
             val effectiveDramaId = if (dramId.isNullOrBlank()) {
                 val categories = catalogRepository.getCategories(effectiveProviderId).getOrNull()
-                val catId = categories?.firstOrNull()?.id ?: "all"
-                val videos = catalogRepository.getVideos(effectiveProviderId, catId, 1).getOrNull() ?: emptyList()
-                videos.firstOrNull()?.id ?: ""
+                val catId = categories?.firstOrNull()?.id
+                if (catId != null) {
+                    val videos = catalogRepository.getVideos(effectiveProviderId, catId, 1).getOrNull() ?: emptyList()
+                    videos.firstOrNull()?.id ?: ""
+                } else {
+                    ""
+                }
             } else {
                 dramId
             }

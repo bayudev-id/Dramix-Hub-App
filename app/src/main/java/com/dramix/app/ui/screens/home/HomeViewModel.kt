@@ -308,17 +308,44 @@ class HomeViewModel(
         _uiState.value = _uiState.value.copy(
             isLoadingCategories = true,
             isLoadingContent = true,
-            errorMessage = null
+            errorMessage = null,
+            categoryVideos = emptyList(),
+            popularVideos = emptyList(),
+            spotlightItem = null
         )
 
         val categoriesResult = catalogRepository.getCategories(providerId)
+        if (categoriesResult.isFailure) {
+            val ex = categoriesResult.exceptionOrNull()
+            _uiState.value = _uiState.value.copy(
+                categories = emptyList(),
+                selectedCategoryId = null,
+                isLoading = false,
+                isLoadingCategories = false,
+                isLoadingContent = false,
+                errorMessage = AppErrorSanitizer.formatCatalog(ex, defaultCode = "ERR_CAT_001")
+            )
+            return
+        }
+
         val categories = categoriesResult.getOrDefault(emptyList())
+        if (categories.isEmpty()) {
+            _uiState.value = _uiState.value.copy(
+                categories = emptyList(),
+                selectedCategoryId = null,
+                isLoading = false,
+                isLoadingCategories = false,
+                isLoadingContent = false,
+                errorMessage = "[ERR_CAT_001] Tidak ada kategori tersedia"
+            )
+            return
+        }
         
         // Validasi categoryId: jika disediakan tapi tidak ada di list, gunakan kategori pertama
         val validCategoryId = if (categoryId != null && categories.any { it.id == categoryId }) {
             categoryId
         } else {
-            categories.firstOrNull()?.id ?: "all"
+            categories.first().id
         }
 
         _uiState.value = _uiState.value.copy(
@@ -339,7 +366,14 @@ class HomeViewModel(
 
     fun refreshCurrentCategory() {
         val providerId = _uiState.value.selectedProviderId ?: return
-        val categoryId = _uiState.value.selectedCategoryId ?: return
+        val categoryId = _uiState.value.selectedCategoryId
+
+        if (categoryId.isNullOrBlank() || _uiState.value.categories.isEmpty()) {
+            viewModelScope.launch {
+                loadProviderCategoriesAndFeed(providerId, null)
+            }
+            return
+        }
 
         _uiState.value = _uiState.value.copy(
             categoryVideos = emptyList(),
@@ -374,8 +408,12 @@ class HomeViewModel(
             val shortDramas = if (_uiState.value.selectedContentType == "short_drama") {
                 items
             } else if (shortDramaProvider != null) {
-                val shortCat = catalogRepository.getCategories(shortDramaProvider.id).getOrNull()?.firstOrNull()?.id ?: "all"
-                catalogRepository.getVideos(shortDramaProvider.id, shortCat, 1).getOrDefault(emptyList())
+                val shortCat = catalogRepository.getCategories(shortDramaProvider.id).getOrNull()?.firstOrNull()?.id
+                if (shortCat != null) {
+                    catalogRepository.getVideos(shortDramaProvider.id, shortCat, 1).getOrDefault(emptyList())
+                } else {
+                    emptyList()
+                }
             } else {
                 emptyList()
             }

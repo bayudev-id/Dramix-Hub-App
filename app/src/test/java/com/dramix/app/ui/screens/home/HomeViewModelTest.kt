@@ -63,7 +63,12 @@ class HomeViewModelTest {
         override suspend fun clearAllHistory(): Int = 1
     }
 
-    private class FakeCatalogRepository : CatalogRepository {
+    private class FakeCatalogRepository(
+        var categoriesResult: Result<List<Category>> = Result.success(listOf(Category(id = "1001", name = "Untukmu"))),
+        var lastRequestedCategoryId: String? = null
+    ) : CatalogRepository {
+        var getCategoriesCallCount = 0
+
         override suspend fun getProviders(): Result<List<ProviderModel>> = Result.success(
             listOf(
                 ProviderModel(id = "wetv", name = "WeTV", contentType = "long_drama"),
@@ -72,26 +77,33 @@ class HomeViewModelTest {
             )
         )
 
-        override suspend fun getCategories(modelId: String): Result<List<Category>> = Result.success(
-            listOf(Category(id = "all", name = "Semua"))
-        )
+        override suspend fun getCategories(modelId: String): Result<List<Category>> {
+            getCategoriesCallCount++
+            return categoriesResult
+        }
 
-        override suspend fun getVideos(modelId: String, categoryId: String, page: Int): Result<List<VideoItem>> = Result.success(
-            listOf(
-                VideoItem(id = "v-1", title = "Spotlight Drama", score = "9.5"),
-                VideoItem(id = "v-2", title = "Popular Drama 2", score = "8.8")
-            )
-        )
-
-        override suspend fun getVideoFeed(modelId: String, categoryId: String, page: Int): Result<VideoFeedPage> = Result.success(
-            VideoFeedPage(
-                items = listOf(
+        override suspend fun getVideos(modelId: String, categoryId: String, page: Int): Result<List<VideoItem>> {
+            lastRequestedCategoryId = categoryId
+            return Result.success(
+                listOf(
                     VideoItem(id = "v-1", title = "Spotlight Drama", score = "9.5"),
                     VideoItem(id = "v-2", title = "Popular Drama 2", score = "8.8")
-                ),
-                hasMore = false
+                )
             )
-        )
+        }
+
+        override suspend fun getVideoFeed(modelId: String, categoryId: String, page: Int): Result<VideoFeedPage> {
+            lastRequestedCategoryId = categoryId
+            return Result.success(
+                VideoFeedPage(
+                    items = listOf(
+                        VideoItem(id = "v-1", title = "Spotlight Drama", score = "9.5"),
+                        VideoItem(id = "v-2", title = "Popular Drama 2", score = "8.8")
+                    ),
+                    hasMore = false
+                )
+            )
+        }
 
         override suspend fun getDramaDetail(modelId: String, id: String): Result<DramaDetail> =
             Result.failure(NotImplementedError())
@@ -193,8 +205,80 @@ class HomeViewModelTest {
         assertTrue(state.contentTypes.any { it.id == "long_drama" && it.count == 2 })
         assertEquals("long_drama", state.selectedContentType)
         assertEquals(2, state.filteredProviders.size)
-        assertEquals("all", state.selectedCategoryId)
+        assertEquals("1001", state.selectedCategoryId)
         assertEquals(2, state.categoryVideos.size)
+    }
+
+    @Test
+    fun homeViewModel_when_categories_fail_does_not_request_feed_with_all_and_shows_error() = runTest {
+        val repo = FakeCatalogRepository(
+            categoriesResult = Result.failure(IllegalStateException("Upstream timeout"))
+        )
+        val viewModel = HomeViewModel(
+            catalogRepository = repo,
+            watchHistoryDao = FakeWatchHistoryDao(),
+            providerPreferences = providerPreferences
+        )
+
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertFalse(state.isLoadingCategories)
+        assertFalse(state.isLoadingContent)
+        assertTrue(state.categories.isEmpty())
+        org.junit.Assert.assertNull(state.selectedCategoryId)
+        org.junit.Assert.assertNull("Harus tidak memanggil video feed dengan category 'all'", repo.lastRequestedCategoryId)
+        assertNotNull(state.errorMessage)
+        assertTrue(state.errorMessage!!.contains("ERR_CAT_001"))
+    }
+
+    @Test
+    fun homeViewModel_when_categories_empty_does_not_request_feed_and_shows_empty_error() = runTest {
+        val repo = FakeCatalogRepository(
+            categoriesResult = Result.success(emptyList())
+        )
+        val viewModel = HomeViewModel(
+            catalogRepository = repo,
+            watchHistoryDao = FakeWatchHistoryDao(),
+            providerPreferences = providerPreferences
+        )
+
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertFalse(state.isLoadingCategories)
+        assertFalse(state.isLoadingContent)
+        assertTrue(state.categories.isEmpty())
+        org.junit.Assert.assertNull(state.selectedCategoryId)
+        org.junit.Assert.assertNull("Harus tidak memanggil video feed dengan category 'all'", repo.lastRequestedCategoryId)
+        assertNotNull(state.errorMessage)
+    }
+
+    @Test
+    fun homeViewModel_refresh_retries_categories_when_categories_were_empty_or_failed() = runTest {
+        val repo = FakeCatalogRepository(
+            categoriesResult = Result.failure(IllegalStateException("First try failed"))
+        )
+        val viewModel = HomeViewModel(
+            catalogRepository = repo,
+            watchHistoryDao = FakeWatchHistoryDao(),
+            providerPreferences = providerPreferences
+        )
+
+        testDispatcher.scheduler.advanceUntilIdle()
+        assertEquals(1, repo.getCategoriesCallCount)
+        assertNotNull(viewModel.uiState.value.errorMessage)
+
+        // Now categories become available, user taps retry / refresh
+        repo.categoriesResult = Result.success(listOf(Category(id = "1001", name = "Untukmu")))
+        viewModel.refreshCurrentCategory()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(3, repo.getCategoriesCallCount)
+        assertEquals("1001", repo.lastRequestedCategoryId)
+        assertEquals("1001", viewModel.uiState.value.selectedCategoryId)
+        assertEquals(2, viewModel.uiState.value.categoryVideos.size)
+        org.junit.Assert.assertNull(viewModel.uiState.value.errorMessage)
     }
 
     @Test
