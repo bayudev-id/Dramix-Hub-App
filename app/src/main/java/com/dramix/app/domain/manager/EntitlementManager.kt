@@ -26,8 +26,8 @@ class EntitlementManager(
             }
         }
 
-        // Freemium Rule: Episode 1..3 are free
-        return if (episodeNumber in 1..3) {
+        // Freemium Rule: Episode 0..3 are free (including prologue/special ep 0)
+        return if (episodeNumber in 0..3) {
             PlaybackAccess.AccessGranted(isFree = true)
         } else {
             // Episode 4+ requires active VIP license

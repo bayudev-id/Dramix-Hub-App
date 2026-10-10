@@ -80,7 +80,12 @@ class EntitlementManagerTest {
     }
 
     @Test
-    fun freemium_policy_allows_episodes_1_to_3_without_license() {
+    fun freemium_policy_allows_episodes_0_to_3_without_license() {
+        // Episode 0 (Prologue/Special) -> Granted Free
+        val accessEp0 = entitlementManager.canPlayEpisode(episodeNumber = 0)
+        assertTrue(accessEp0 is PlaybackAccess.AccessGranted)
+        assertTrue((accessEp0 as PlaybackAccess.AccessGranted).isFree)
+
         // Episode 1 -> Granted Free
         val accessEp1 = entitlementManager.canPlayEpisode(episodeNumber = 1)
         assertTrue(accessEp1 is PlaybackAccess.AccessGranted)
