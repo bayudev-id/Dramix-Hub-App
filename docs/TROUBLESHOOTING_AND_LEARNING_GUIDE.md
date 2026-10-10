@@ -19,6 +19,7 @@ Dokumen ini mendokumentasikan secara rinci analisis akar masalah (*root cause an
 12. [Kasus 12: Urutan Episode Terbalik & Bug Episode Bernomor 0 pada KissKH (Falsy JavaScript Evaluation & Ascending Sort)](#kasus-12-urutan-episode-terbalik--bug-episode-bernomor-0-pada-kisskh-falsy-javascript-evaluation--ascending-sort)
 13. [Kasus 13: Error ExoPlayer UnrecognizedInputFormatException pada Episode Ongoing KissKH (Countdown Timer Widget vs Video Stream)](#kasus-13-error-exoplayer-unrecognizedinputformatexception-pada-episode-ongoing-kisskh-countdown-timer-widget-vs-video-stream)
 14. [Kasus 14: Kegagalan Pemutaran Youku — Widevine CBCS DRM Decryption, Master Playlist Track Merging, Cleartext HTTP CDN & TextureView vs SurfaceView Secure Decoders](#kasus-14-kegagalan-pemutaran-youku--widevine-cbcs-drm-decryption-master-playlist-track-merging-cleartext-http-cdn--textureview-vs-surfaceview-secure-decoders)
+15. [Kasus 15: Duplikasi Subtitle Indonesian & Subtitle Tidak Muncul pada Youku (Format Advanced SubStation Alpha .ass & Upstream Language Misclassification)](#kasus-15-duplikasi-subtitle-indonesian--subtitle-tidak-muncul-pada-youku-format-advanced-substation-alpha-ass--upstream-language-misclassification)
 
 ---
 
@@ -975,4 +976,83 @@ Izinkan lalu lintas HTTP port 80 untuk CDN segmen video Youku:
   Saat memanggil server DRM pihak ketiga yang menggunakan form-encoded POST, selalu buang query string dari target URL (`url.substringBefore("?")`) guna mencegah ambiguitas parameter parser di sisi gateway/server otentikasi.
 - **Pertahankan Delegasi Provisioning Default**:
   Jangan pernah menulis ulang logika `executeProvisionRequest` secara manual kecuali benar-benar menggunakan server provisioning in-house privat. Selalu delegasikan ke `HttpMediaDrmCallback` bawaan sistem operasi.
+
+---
+
+## Kasus 15: Duplikasi Subtitle Indonesian & Subtitle Tidak Muncul pada Youku (Format Advanced SubStation Alpha .ass & Upstream Language Misclassification)
+
+### Gejala Masalah
+1. Subtitle Youku tidak muncul di layar video player meskipun opsi subtitle "Indonesian" sudah dipilih oleh pengguna.
+2. Pada modal / sheet pemilihan subtitle player, terdapat 2 pilihan bertuliskan "Indonesian".
+3. Memilih salah satu dari kedua pilihan tersebut tetap tidak memunculkan teks subtitle pada pemutar video Dramix.
+
+### Akar Masalah (Root Cause)
+1. **Subtitle Parser Format Incompatibility (.ass vs .srt/.vtt)**:
+   - File subtitle dari provider Youku didistribusikan dalam format **Advanced SubStation Alpha (`.ass` / `.ssa`)**, bukan SRT atau WebVTT.
+   - Kelas `SubtitleParser.kt` pada Dramix Android hanya memiliki implementasi parser `parseSRT` dan `parseVTT` yang secara ketat mencari tanda panah rentang waktu `-->` (`00:00:01,000 --> 00:00:04,000`).
+   - Karena file `.ass` menggunakan format baris event `Dialogue: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text` dengan format waktu `0:00:29.82` tanpa tanda `-->`, parser menghasilkan `0 cues`. `SubtitleManager` menerima daftar cue kosong sehingga tidak ada teks yang dirender ke `SubtitleOverlay`.
+2. **Upstream & Client Language Misclassification (Duplikasi Label "Indonesian")**:
+   - Provider Youku / Cineflow mengembalikan 2 entri yang secara keliru terklasifikasi sebagai bahasa Indonesia:
+     - Entri pertama memiliki `lang: "in"` dengan `label: "印度"` (Bahasa Hindi / India). Secara historis, Java/Android `Locale("in")` dan ISO 639-1 lama memetakan kode `in` ke *Indonesian*, sehingga fungsi `matchLanguage("in")` di client memetakannya ke `"Indonesian"`.
+     - Entri kedua memiliki nama/label `"马来语"` (Bahasa Melayu / Malay) dengan nama file `synced_ms_...ass`, namun scraper upstream Cineflow melabelinya secara salah dengan `lang: "indonesia"`.
+   - Di sisi `VodPlayerViewModel`, pembuatan ID subtitle menggunakan `sub.lang?.lowercase()`. Akibatnya kedua entri menghasilkan ID yang bertabrakan (`"indonesia"` atau `"in"` yang dianggap sama), serta label keduanya diformat menjadi `"Indonesian"`. Hal ini membingungkan pengguna dan membuat seleksi subtitle selalu mengambil entri yang salah.
+
+### Solusi & Implementasi Teknis
+
+#### 1. Dukungan Parsing Format ASS/SSA (`SubtitleParser.kt`)
+Menambahkan fungsi `parseASS` yang membaca section `[Events]`, membedah kolom `Format:`, mengekstrak timestamp `H:MM:SS.cs`, dan membersihkan style tags `{...}` serta escape sequence `\N`:
+```kotlin
+fun parseASS(content: String): List<SubtitleCue> {
+    val subtitles = mutableListOf<SubtitleCue>()
+    val lines = content.split("\n").map { it.trim() }
+    var inEvents = false
+    var startIndex = 1
+    var endIndex = 2
+    var textIndex = 9
+    var subtitleId = 0
+
+    for (line in lines) {
+        if (line.startsWith("[Events]", ignoreCase = true)) {
+            inEvents = true
+            continue
+        }
+        if (line.startsWith("Format:", ignoreCase = true)) {
+            val formatFields = line.substringAfter(":").trim().split(",").map { it.trim().lowercase() }
+            startIndex = formatFields.indexOf("start").takeIf { it != -1 } ?: startIndex
+            endIndex = formatFields.indexOf("end").takeIf { it != -1 } ?: endIndex
+            textIndex = formatFields.indexOf("text").takeIf { it != -1 } ?: (formatFields.size - 1)
+            continue
+        }
+        if (line.startsWith("Dialogue:", ignoreCase = true)) {
+            val payload = line.substringAfter(":").trim()
+            val tokens = splitAssDialogue(payload, maxTokens = 10)
+            val startMs = parseAssTime(tokens[startIndex])
+            val endMs = parseAssTime(tokens[endIndex])
+            val cleanText = cleanAssText(tokens[textIndex])
+            if (cleanText.isNotBlank()) {
+                subtitles.add(SubtitleCue("${++subtitleId}", startMs, endMs, cleanText))
+            }
+        }
+    }
+    return subtitles
+}
+```
+
+Memperbarui `parseAuto` agar secara cerdas mendeteksi header `[Events]`, `[Script Info]`, atau `Dialogue:` dan memicu `parseASS`.
+
+#### 2. Normalisasi Bahasa di Sisi Gateway (`source.pb.js`)
+Pada hook Pocketbase `/api/modelles/source`, tambahkan filter normalisasi untuk provider Youku dengan memeriksa label asli dan pola penamaan URL (`synced_ms_` -> Malay, `synced_id_` -> Indonesian, `synced_in_` / `印度` -> Hindi, `synced_cht_` -> Mandarin Tradisional, `synced_default_` -> Mandarin Sederhana).
+
+#### 3. Normalisasi & De-duplikasi ID di Sisi Klien Android (`VodPlayerViewModel.kt`)
+- **Indeksasi ID Unik**: Jika terdapat lebih dari satu subtitle dengan kode bahasa yang sama, berikan suffix indeks (`${baseId}_$index`) sehingga tidak terjadi tabrakan ID.
+- **Pencarian Subtitle Berbasis URL**: Saat pengguna memilih subtitle, cocokkan langsung via `targetSubUi.url` agar subtitle yang diunduh adalah file spesifik yang dipilih pengguna.
+- **Pembersihan Kode Bahasa**: Hilangkan mapping ambigu `clean == "in"` ke Indonesian, dan petakan label karakter Tionghoa seperti `印度` ke Hindi serta `马来` ke Malay.
+
+### Pencegahan ke Depan
+- **Dukung Multi-Format Subtitle Sejak Awal**:
+  Player kustom video harus mendukung 3 format subtitle utama web/streaming: SRT, WebVTT, dan ASS/SSA. Selalu tambahkan unit test komprehensif untuk ketiga format.
+- **Jangan Percayai Kode Bahasa Mentah dari Upstream Scraper**:
+  Scraper agregator sering kali memiliki cacat pemetaan bahasa (misalnya menganggap Malay adalah Indonesia, atau ISO lama `in` vs `id`). Selalu gunakan URL file subtitle atau metadata pendukung sebagai validasi silang (cross-validation).
+- **Gunakan ID Unik Berbasis URL atau Hash pada UI Layer**:
+  Hindari menggunakan hanya kode bahasa (`sub.lang`) sebagai identifier unik pada daftar pilihan UI, karena satu video bisa memiliki beberapa track dengan bahasa yang sama (misalnya subtitle resmi vs fan-sub, atau variasi dialek).
 

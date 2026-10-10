@@ -483,8 +483,13 @@ class VodPlayerViewModel(
             val subtitleOptions = mutableListOf<SubtitleUiModel>()
             subtitleOptions.add(SubtitleUiModel(id = "off", label = "Off"))
 
-            source.subtitles.forEach { sub ->
-                val id = sub.lang?.lowercase()?.trim() ?: sub.url
+            source.subtitles.forEachIndexed { index, sub ->
+                val baseId = sub.lang?.lowercase()?.trim()?.takeIf { it.isNotBlank() } ?: "sub"
+                val id = if (source.subtitles.count { it.lang?.equals(sub.lang, ignoreCase = true) == true } > 1) {
+                    "${baseId}_$index"
+                } else {
+                    baseId
+                }
                 val label = formatSubtitleLabel(sub.lang, sub.label, sub.url)
                 subtitleOptions.add(
                     SubtitleUiModel(
@@ -503,12 +508,12 @@ class VodPlayerViewModel(
 
             val defaultSub = matchedSavedSub ?: subtitleOptions.find {
                 it.id.equals("id", ignoreCase = true) ||
-                    it.id.equals("in", ignoreCase = true) ||
-                    it.id.equals("in_id", ignoreCase = true) ||
-                    it.id.contains("indo", ignoreCase = true) ||
+                    it.id.startsWith("id_", ignoreCase = true) ||
+                    it.id.equals("indonesia", ignoreCase = true) ||
+                    it.id.startsWith("indonesia_", ignoreCase = true) ||
                     it.label.contains("Indo", ignoreCase = true) ||
-                    it.language?.contains("id") == true ||
-                    it.language?.contains("in") == true
+                    it.language?.equals("id", ignoreCase = true) == true ||
+                    it.language?.equals("indonesia", ignoreCase = true) == true
             }
             val defaultSubId = if (savedSubId == "off") "off" else (defaultSub?.id ?: "off")
 
@@ -625,9 +630,14 @@ class VodPlayerViewModel(
         
         viewModelScope.launch {
             try {
-                val targetSubtitle = subtitles.find { sub ->
-                    val id = sub.lang?.lowercase()?.trim() ?: sub.url
-                    id.equals(selectedId, ignoreCase = true) || sub.lang?.lowercase()?.equals(selectedId, ignoreCase = true) == true
+                val targetSubUi = _uiState.value.availableSubtitles.find { it.id.equals(selectedId, ignoreCase = true) }
+                val targetSubtitle = if (!targetSubUi?.url.isNullOrBlank()) {
+                    subtitles.find { it.url == targetSubUi?.url }
+                } else {
+                    subtitles.find { sub ->
+                        val id = sub.lang?.lowercase()?.trim() ?: sub.url
+                        id.equals(selectedId, ignoreCase = true) || sub.lang?.lowercase()?.equals(selectedId, ignoreCase = true) == true
+                    }
                 }
                 
                 if (targetSubtitle == null || targetSubtitle.url.isBlank()) {
@@ -1108,8 +1118,8 @@ private fun getQualityWeight(label: String): Int {
 
 fun formatSubtitleLabel(lang: String?, label: String?, url: String? = null): String {
     val candidates = listOfNotNull(
-        lang?.lowercase()?.trim(),
         label?.lowercase()?.trim(),
+        lang?.lowercase()?.trim(),
         url?.let { extractLangFromUrl(it) }
     )
 
@@ -1131,23 +1141,25 @@ fun formatSubtitleLabel(lang: String?, label: String?, url: String? = null): Str
 
 private fun extractLangFromUrl(url: String): String? {
     val lower = url.lowercase()
-    if (lower.contains("indonesian") || lower.contains("indonesia")) return "id"
-    if (lower.contains("english")) return "en"
-    if (lower.contains("malay") || lower.contains("melayu")) return "ms"
-    if (lower.contains("arabic")) return "ar"
-    if (lower.contains("spanish") || lower.contains("espanol")) return "es"
-    if (lower.contains("portuguese") || lower.contains("portugis")) return "pt"
-    if (lower.contains("vietnamese") || lower.contains("vietnam")) return "vi"
-    if (lower.contains("thai")) return "th"
+    if (lower.contains("synced_ms_") || lower.contains("_ms_") || lower.contains("malay") || lower.contains("melayu")) return "ms"
+    if (lower.contains("synced_id_") || lower.contains("_id_") || lower.contains("indonesian") || lower.contains("indonesia")) return "id"
+    if (lower.contains("synced_in_") || lower.contains("_in_") || lower.contains("hindi")) return "hi"
+    if (lower.contains("synced_en_") || lower.contains("_en_") || lower.contains("english")) return "en"
+    if (lower.contains("synced_cht_") || lower.contains("tradisional") || lower.contains("traditional")) return "zh-tw"
+    if (lower.contains("synced_default_") || lower.contains("chinese") || lower.contains("mandarin")) return "zh"
+    if (lower.contains("synced_kr_") || lower.contains("_kr_") || lower.contains("korean")) return "ko"
+    if (lower.contains("synced_th_") || lower.contains("_th_") || lower.contains("thai")) return "th"
+    if (lower.contains("synced_vi_") || lower.contains("_vi_") || lower.contains("vietnamese") || lower.contains("vietnam")) return "vi"
+    if (lower.contains("synced_es_") || lower.contains("_es_") || lower.contains("spanish") || lower.contains("espanol")) return "es"
+    if (lower.contains("synced_po_") || lower.contains("_po_") || lower.contains("portuguese") || lower.contains("portugis")) return "pt"
+    if (lower.contains("synced_ar_") || lower.contains("_ar_") || lower.contains("arabic")) return "ar"
     if (lower.contains("khmer")) return "km"
-    if (lower.contains("chinese") || lower.contains("mandarin")) return "zh"
-    if (lower.contains("korean")) return "ko"
     if (lower.contains("japanese")) return "ja"
 
-    val filePattern = Regex("""[._-]([a-zA-Z]{2,3}(?:[-_][a-zA-Z]{2,4})?)\.(?:srt|vtt)""")
+    val filePattern = Regex("""[._-]([a-zA-Z]{2,3}(?:[-_][a-zA-Z]{2,4})?)\.(?:srt|vtt|ass|ssa)""")
     filePattern.find(lower)?.groupValues?.get(1)?.let { return it }
 
-    val pathPattern = Regex("""/(?:mul/)?([a-zA-Z]{2,3})/[^/]+\.(?:srt|vtt)""")
+    val pathPattern = Regex("""/(?:mul/)?([a-zA-Z]{2,3})/[^/]+\.(?:srt|vtt|ass|ssa)""")
     pathPattern.find(lower)?.groupValues?.get(1)?.let { return it }
 
     return null
@@ -1157,62 +1169,62 @@ private fun matchLanguage(code: String): String? {
     val clean = code.trim().lowercase().replace('_', '-')
     return when {
         // Indonesian
-        clean == "id" || clean == "in" || clean == "ind" || clean == "id-id" || clean == "in-id" ||
-            clean.contains("indo") || clean == "bahasa" || clean == "bahasa indonesia" -> "Indonesian"
+        clean == "id" || clean == "ind" || clean == "id-id" || clean == "in-id" || clean == "indonesia" || clean == "indonesian" ||
+            clean.contains("indo") || clean == "bahasa" || clean == "bahasa indonesia" || clean.contains("印尼") -> "Indonesian"
 
         // English
         clean == "en" || clean == "eng" || clean == "en-us" || clean == "en-gb" ||
-            clean.contains("english") || clean.contains("inggris") -> "English"
+            clean.contains("english") || clean.contains("inggris") || clean.contains("英语") -> "English"
 
         // Malay
-        clean == "ms" || clean == "may" || clean == "msa" || clean == "ms-my" ||
-            clean.contains("malay") || clean.contains("melayu") -> "Malay"
+        clean == "ms" || clean == "may" || clean == "msa" || clean == "ms-my" || clean == "malay" ||
+            clean.contains("malay") || clean.contains("melayu") || clean.contains("马来") -> "Malay"
 
         // Arabic
         clean == "ar" || clean == "ara" || clean == "ar-sa" || clean == "ar-ae" ||
-            clean.contains("arab") || clean.contains("عرب") -> "Arabic"
+            clean.contains("arab") || clean.contains("عرب") || clean.contains("阿语") -> "Arabic"
 
         // Chinese Simplified & Traditional
-        clean == "zh-cn" || clean == "zh-hans" || clean.contains("sederhana") || clean.contains("simplified") -> "Mandarin (Sederhana)"
-        clean == "zh-tw" || clean == "zh-hk" || clean == "zh-hant" || clean.contains("tradisional") || clean.contains("traditional") -> "Mandarin (Tradisional)"
+        clean == "zh-cn" || clean == "zh-hans" || clean.contains("sederhana") || clean.contains("simplified") || clean.contains("简体") -> "Mandarin (Sederhana)"
+        clean == "zh-tw" || clean == "zh-hk" || clean == "zh-hant" || clean.contains("tradisional") || clean.contains("traditional") || clean.contains("繁体") -> "Mandarin (Tradisional)"
         clean == "zh" || clean == "chi" || clean == "zho" || clean.contains("mandarin") || clean.contains("chinese") || clean.contains("中文") -> "Mandarin"
 
         // Thai
-        clean == "th" || clean == "tha" || clean == "th-th" || clean.contains("thai") || clean.contains("ไทย") -> "Thai"
+        clean == "th" || clean == "tha" || clean == "th-th" || clean.contains("thai") || clean.contains("ไทย") || clean.contains("泰") -> "Thai"
 
         // Vietnamese
-        clean == "vi" || clean == "vie" || clean == "vi-vn" || clean.contains("viet") || clean.contains("tiếng việt") -> "Vietnamese"
+        clean == "vi" || clean == "vie" || clean == "vi-vn" || clean.contains("viet") || clean.contains("tiếng việt") || clean.contains("越") -> "Vietnamese"
 
         // Khmer
         clean == "km" || clean == "khm" || clean == "km-kh" || clean.contains("khmer") || clean.contains("kamboja") || clean.contains("ខេមរ") -> "Khmer"
 
         // Korean
-        clean == "ko" || clean == "kor" || clean == "ko-kr" || clean.contains("korea") || clean.contains("한국") -> "Korean"
+        clean == "ko" || clean == "kor" || clean == "ko-kr" || clean.contains("korea") || clean.contains("한국") || clean.contains("韩") -> "Korean"
 
         // Japanese
-        clean == "ja" || clean == "jp" || clean == "jpn" || clean == "ja-jp" || clean.contains("japan") || clean.contains("jepang") || clean.contains("日本") -> "Japanese"
+        clean == "ja" || clean == "jp" || clean == "jpn" || clean == "ja-jp" || clean.contains("japan") || clean.contains("jepang") || clean.contains("日本") || clean.contains("日") -> "Japanese"
 
         // Spanish
         clean == "es" || clean == "spa" || clean == "es-es" || clean == "es-la" || clean == "es-mx" ||
-            clean.contains("span") || clean.contains("spanyol") || clean.contains("español") -> "Spanish"
+            clean.contains("span") || clean.contains("spanyol") || clean.contains("español") || clean.contains("西班牙") -> "Spanish"
 
         // Portuguese
         clean == "pt" || clean == "por" || clean == "pt-br" || clean == "pt-pt" ||
-            clean.contains("portug") -> "Portuguese"
+            clean.contains("portug") || clean.contains("葡萄牙") -> "Portuguese"
 
         // French
         clean == "fr" || clean == "fra" || clean == "fre" || clean == "fr-fr" ||
-            clean.contains("french") || clean.contains("prancis") || clean.contains("français") -> "French"
+            clean.contains("french") || clean.contains("prancis") || clean.contains("français") || clean.contains("法") -> "French"
 
         // German
         clean == "de" || clean == "deu" || clean == "ger" || clean == "de-de" ||
-            clean.contains("german") || clean.contains("jerman") || clean.contains("deutsch") -> "German"
+            clean.contains("german") || clean.contains("jerman") || clean.contains("deutsch") || clean.contains("德") -> "German"
 
         // Russian
-        clean == "ru" || clean == "rus" || clean == "ru-ru" || clean.contains("russ") || clean.contains("rusia") || clean.contains("рус") -> "Russian"
+        clean == "ru" || clean == "rus" || clean == "ru-ru" || clean.contains("russ") || clean.contains("rusia") || clean.contains("рус") || clean.contains("俄") -> "Russian"
 
         // Hindi
-        clean == "hi" || clean == "hin" || clean == "hi-in" || clean.contains("hindi") || clean.contains("हिन्द") -> "Hindi"
+        clean == "hi" || clean == "hin" || clean == "hi-in" || clean.contains("hindi") || clean.contains("हिन्द") || clean.contains("印度") -> "Hindi"
 
         // Filipino / Tagalog
         clean == "tl" || clean == "fil" || clean == "fil-ph" || clean == "tgl" || clean.contains("tagalog") || clean.contains("filipino") -> "Filipino"

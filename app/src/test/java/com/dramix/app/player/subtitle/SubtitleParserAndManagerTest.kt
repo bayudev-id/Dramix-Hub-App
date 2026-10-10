@@ -71,4 +71,44 @@ class SubtitleParserAndManagerTest {
         manager.updatePosition(4500L)
         assertNull(manager.currentSubtitle.value)
     }
+
+    @Test
+    fun parseASS_validContent_returnsParsedCuesWithCleanText() {
+        val assContent = """
+            [Script Info]
+            Title: Sample ASS
+            ScriptType: v4.00+
+
+            [Events]
+            Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+            Dialogue: 0,0:00:29.82,0:00:33.98,Default,,0,0,0,,{\an8}♪Di tempat yang penuh senyuman\Ndan keindahan itu♪
+            Dialogue: 0,0:00:34.15,0:00:38.72,Default,,0,0,0,,Khayalan tentangmu tumbuh\ndengan bebasnya
+        """.trimIndent()
+
+        val cues = SubtitleParser.parseASS(assContent)
+        assertEquals(2, cues.size)
+
+        assertEquals("♪Di tempat yang penuh senyuman\ndan keindahan itu♪", cues[0].text)
+        assertEquals(29820L, cues[0].startTimeMs)
+        assertEquals(33980L, cues[0].endTimeMs)
+
+        assertEquals("Khayalan tentangmu tumbuh\ndengan bebasnya", cues[1].text)
+        assertEquals(34150L, cues[1].startTimeMs)
+        assertEquals(38720L, cues[1].endTimeMs)
+    }
+
+    @Test
+    fun parseAuto_assContent_returnsParsedCues() {
+        val assContent = """
+            [Events]
+            Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+            Dialogue: 0,0:01:05.50,0:01:08.20,Default,,0,0,0,,Halo dunia
+        """.trimIndent()
+
+        val cues = SubtitleParser.parseAuto(assContent)
+        assertEquals(1, cues.size)
+        assertEquals("Halo dunia", cues[0].text)
+        assertEquals(65500L, cues[0].startTimeMs)
+        assertEquals(68200L, cues[0].endTimeMs)
+    }
 }
