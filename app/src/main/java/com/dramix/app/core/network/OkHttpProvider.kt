@@ -5,19 +5,40 @@ import com.dramix.app.BuildConfig
 import com.dramix.app.core.security.DeviceIdentifier
 import okhttp3.Cache
 import okhttp3.CertificatePinner
+import okhttp3.ConnectionPool
 import okhttp3.Dispatcher
+import okhttp3.Dns
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import java.io.File
+import java.net.Inet4Address
 import java.util.concurrent.TimeUnit
 
 object OkHttpProvider {
+
+    /**
+     * Custom DNS that prioritizes IPv4 addresses before IPv6.
+     * Prevents multi-second delays on dual-stack CDNs (such as AWS CloudFront for WeTV)
+     * when the local network advertises IPv6 but has no routable IPv6 WAN connection.
+     */
+    private val ipv4FirstDns = object : Dns {
+        override fun lookup(hostname: String): List<java.net.InetAddress> {
+            val addresses = Dns.SYSTEM.lookup(hostname)
+            return if (addresses.size <= 1) {
+                addresses
+            } else {
+                addresses.sortedWith(compareBy { it !is Inet4Address })
+            }
+        }
+    }
 
     /**
      * Dedicated high-concurrency OkHttpClient for Coil image loading.
      *
      * - maxRequestsPerHost: 32 (default is 5). Prevents grid image loading from
      *   bottlenecking when 20+ covers are fetched concurrently from the same CDN host.
+     * - connectionPool: 32 connections kept alive to eliminate TLS renegotiation overhead.
+     * - dns: ipv4FirstDns to prevent stalling on unreachable IPv6 addresses.
      * - No SecurityHeadersInterceptor or logging to maximize image fetch throughput.
      * - CdnRefererInterceptor preserved for MovieBox/Youku CDNs.
      */
@@ -29,9 +50,11 @@ object OkHttpProvider {
 
         return OkHttpClient.Builder()
             .dispatcher(dispatcher)
-            .connectTimeout(10, TimeUnit.SECONDS)
-            .readTimeout(15, TimeUnit.SECONDS)
-            .writeTimeout(15, TimeUnit.SECONDS)
+            .connectionPool(ConnectionPool(32, 2, TimeUnit.MINUTES))
+            .dns(ipv4FirstDns)
+            .connectTimeout(5, TimeUnit.SECONDS)
+            .readTimeout(10, TimeUnit.SECONDS)
+            .writeTimeout(10, TimeUnit.SECONDS)
             .addInterceptor(CdnRefererInterceptor())
             .build()
     }
@@ -50,6 +73,7 @@ object OkHttpProvider {
         }
 
         val builder = OkHttpClient.Builder()
+            .dns(ipv4FirstDns)
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
             .writeTimeout(30, TimeUnit.SECONDS)
