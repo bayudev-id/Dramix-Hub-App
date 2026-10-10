@@ -485,7 +485,17 @@ private fun ContinueWatchingSection(
         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
     )
 
+    val rowState = rememberLazyListState()
+    val latestHistoryKey = historyList.firstOrNull()?.let { "${it.id}_${it.updatedAt}" }
+
+    LaunchedEffect(latestHistoryKey) {
+        if (historyList.isNotEmpty()) {
+            rowState.scrollToItem(0)
+        }
+    }
+
     LazyRow(
+        state = rowState,
         contentPadding = PaddingValues(horizontal = 16.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
