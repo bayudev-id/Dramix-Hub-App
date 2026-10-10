@@ -10,15 +10,7 @@ import retrofit2.converter.moshi.MoshiConverterFactory
 
 object RetrofitProvider {
 
-    val DEFAULT_GATEWAY_URL: String
-        get() {
-            val isEmulator = (Build.FINGERPRINT.startsWith("generic") ||
-                Build.MODEL.contains("google_sdk") ||
-                Build.MODEL.contains("Emulator") ||
-                Build.HARDWARE.contains("goldfish") ||
-                Build.HARDWARE.contains("ranchu"))
-            return if (isEmulator) "http://10.0.2.2:8090/" else "http://127.0.0.1:8090/"
-        }
+    const val DEFAULT_GATEWAY_URL: String = "https://api.dramix.web.id/"
 
     fun createMoshi(): Moshi {
         return Moshi.Builder()

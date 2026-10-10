@@ -262,7 +262,7 @@ class ProfileViewModelTest {
 
         val state = viewModel.uiState.value
         assertFalse(state.isVip)
-        assertEquals("Lisensi sudah terikat ke HP lain", state.activationErrorMessage)
+        assertEquals("[ERR_LIC_003] Lisensi sudah terikat ke perangkat lain", state.activationErrorMessage)
     }
 
     @Test

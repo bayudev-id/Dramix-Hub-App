@@ -9,6 +9,7 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
+import com.dramix.app.core.network.AppErrorSanitizer
 import com.dramix.app.domain.model.Subtitle
 import com.dramix.app.player.engine.HeaderInjectingDataSourceFactory
 import com.dramix.app.player.model.PlaybackState
@@ -60,8 +61,9 @@ class DramixPlayerController(
         override fun onPlayerError(error: PlaybackException) {
             android.util.Log.e("PlayerController", "Player error: ${error.message}", error)
             stopProgressTracker()
+            val safeMessage = AppErrorSanitizer.formatPlayback(error)
             _playbackState.value = PlaybackState.Error(
-                message = error.localizedMessage ?: "Playback error: ${error.errorCodeName}",
+                message = safeMessage,
                 cause = error
             )
         }
@@ -134,7 +136,9 @@ class DramixPlayerController(
             player.prepare()
             player.playWhenReady = autoPlay
         } catch (e: Exception) {
-            _playbackState.value = PlaybackState.Error(e.localizedMessage ?: "Gagal memuat siaran")
+            android.util.Log.e("PlayerController", "Prepare error: ${e.message}", e)
+            val safeMessage = AppErrorSanitizer.formatPlayback(e)
+            _playbackState.value = PlaybackState.Error(safeMessage, cause = e)
         }
     }
 

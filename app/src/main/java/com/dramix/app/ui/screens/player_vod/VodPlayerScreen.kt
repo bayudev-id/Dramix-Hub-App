@@ -32,6 +32,10 @@ import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.DownloadDone
 import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -255,6 +259,13 @@ fun VodPlayerScreen(
                     onUpdateTextColor = { color -> viewModel.updateSubtitleTextColor(color, isFullscreen = true) },
                     onUpdateBgColor = { color -> viewModel.updateSubtitleBgColor(color, isFullscreen = true) }
                 )
+
+                if (uiState.errorMessage != null && !uiState.isLoadingPlayback && uiState.rentalBlockedEpisode == null) {
+                    VodPlayerErrorOverlay(
+                        errorMessage = uiState.errorMessage!!,
+                        onRetry = { viewModel.refreshCurrentEpisode() }
+                    )
+                }
             }
         } else {
             Column(modifier = Modifier.fillMaxSize()) {
@@ -324,6 +335,13 @@ fun VodPlayerScreen(
                         onUpdateTextColor = { color -> viewModel.updateSubtitleTextColor(color, isFullscreen = false) },
                         onUpdateBgColor = { color -> viewModel.updateSubtitleBgColor(color, isFullscreen = false) }
                     )
+
+                    if (uiState.errorMessage != null && !uiState.isLoadingPlayback && uiState.rentalBlockedEpisode == null) {
+                        VodPlayerErrorOverlay(
+                            errorMessage = uiState.errorMessage!!,
+                            onRetry = { viewModel.refreshCurrentEpisode() }
+                        )
+                    }
                 }
 
                 // Scrollable Content & Metadata Area
@@ -745,5 +763,53 @@ private fun CastMemberItem(member: CastMember) {
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.fillMaxWidth()
         )
+    }
+}
+
+@Composable
+private fun VodPlayerErrorOverlay(
+    errorMessage: String,
+    onRetry: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.88f))
+            .padding(24.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Icon(
+                imageVector = Icons.Default.Warning,
+                contentDescription = "Error",
+                tint = CrimsonPlay,
+                modifier = Modifier.size(36.dp)
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = errorMessage,
+                color = Slate50,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium,
+                textAlign = TextAlign.Center
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            Button(
+                onClick = onRetry,
+                colors = ButtonDefaults.buttonColors(containerColor = CrimsonPlay),
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Refresh,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(text = "Coba Lagi", color = Color.White, fontSize = 13.sp)
+            }
+        }
     }
 }

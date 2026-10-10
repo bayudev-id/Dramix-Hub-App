@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.dramix.app.core.database.dao.BookmarkDao
 import com.dramix.app.core.database.dao.DownloadRecordDao
 import com.dramix.app.core.database.dao.WatchHistoryDao
+import com.dramix.app.core.network.AppErrorSanitizer
 import com.dramix.app.core.database.entity.BookmarkEntity
 import com.dramix.app.core.database.entity.WatchHistoryEntity
 import com.dramix.app.data.source.local.PlayerPreferences
@@ -200,7 +201,7 @@ class VodPlayerViewModel(
 
                 _uiState.value = _uiState.value.copy(
                     isLoadingDetail = false,
-                    errorMessage = detailResult.exceptionOrNull()?.localizedMessage ?: "Gagal memuat detail drama"
+                    errorMessage = AppErrorSanitizer.formatDetail(detailResult.exceptionOrNull())
                 )
                 return@launch
             }
@@ -398,7 +399,7 @@ class VodPlayerViewModel(
                 } else {
                     _uiState.value = _uiState.value.copy(
                         isLoadingPlayback = false,
-                        errorMessage = error?.localizedMessage ?: "Gagal memuat sumber video"
+                        errorMessage = AppErrorSanitizer.formatSource(error)
                     )
                 }
                 return@launch
@@ -420,7 +421,7 @@ class VodPlayerViewModel(
                 } else {
                     _uiState.value = _uiState.value.copy(
                         isLoadingPlayback = false,
-                        errorMessage = "Tidak ada stream video yang tersedia"
+                        errorMessage = "[ERR_STR_002] Tidak ada stream video yang tersedia"
                     )
                 }
                 return@launch
@@ -721,6 +722,11 @@ class VodPlayerViewModel(
                     if (hasNextEpisode()) {
                         playNextEpisode()
                     }
+                } else if (state is com.dramix.app.player.model.PlaybackState.Error) {
+                    _uiState.value = _uiState.value.copy(
+                        isLoadingPlayback = false,
+                        errorMessage = state.message
+                    )
                 }
             }
         }
@@ -920,7 +926,7 @@ class VodPlayerViewModel(
                             )
                         } else {
                             _uiState.value = _uiState.value.copy(
-                                errorMessage = "Tidak ada stream video yang tersedia. Silakan coba lagi.",
+                                errorMessage = "[ERR_STR_002] Tidak ada stream video yang tersedia. Silakan coba lagi.",
                                 isRefreshing = false
                             )
                         }
@@ -934,14 +940,14 @@ class VodPlayerViewModel(
                         )
                     } else {
                         _uiState.value = _uiState.value.copy(
-                            errorMessage = sourceResult.exceptionOrNull()?.localizedMessage ?: "Gagal memuat stream",
+                            errorMessage = AppErrorSanitizer.formatSource(sourceResult.exceptionOrNull()),
                             isRefreshing = false
                         )
                     }
                 }
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
-                    errorMessage = "Error: ${e.localizedMessage}",
+                    errorMessage = AppErrorSanitizer.formatSource(e),
                     isRefreshing = false
                 )
             }

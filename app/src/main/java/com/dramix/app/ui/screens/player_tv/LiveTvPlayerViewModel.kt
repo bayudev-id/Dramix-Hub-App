@@ -3,6 +3,7 @@ package com.dramix.app.ui.screens.player_tv
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.media3.common.C
+import com.dramix.app.core.network.AppErrorSanitizer
 import com.dramix.app.domain.model.Category
 import com.dramix.app.domain.model.PlaybackSource
 import com.dramix.app.domain.model.VideoItem
@@ -53,7 +54,22 @@ class LiveTvPlayerViewModel(
     val uiState: StateFlow<LiveTvUiState> = _uiState.asStateFlow()
 
     init {
+        observePlaybackState()
         loadLiveTvFeed(initialProviderId)
+    }
+
+    private fun observePlaybackState() {
+        viewModelScope.launch {
+            playerController.playbackState.collect { state ->
+                if (state is com.dramix.app.player.model.PlaybackState.Error) {
+                    _uiState.value = _uiState.value.copy(
+                        isLoadingStream = false,
+                        isStreamError = true,
+                        errorMessage = state.message
+                    )
+                }
+            }
+        }
     }
 
     fun loadLiveTvFeed(provId: String?) {
@@ -189,21 +205,21 @@ class LiveTvPlayerViewModel(
                         _uiState.value = _uiState.value.copy(
                             isLoadingStream = false,
                             isStreamError = true,
-                            errorMessage = e.localizedMessage ?: "Gagal memuat pemutar siaran"
+                            errorMessage = AppErrorSanitizer.formatPlayback(e)
                         )
                     }
                 } else {
                     _uiState.value = _uiState.value.copy(
                         isLoadingStream = false,
                         isStreamError = true,
-                        errorMessage = "Aliran siaran tidak tersedia"
+                        errorMessage = "[ERR_STR_002] Aliran siaran tidak tersedia"
                     )
                 }
             } else {
                 _uiState.value = _uiState.value.copy(
                     isLoadingStream = false,
                     isStreamError = true,
-                    errorMessage = sourceResult.exceptionOrNull()?.localizedMessage ?: "Sinyal siaran terputus"
+                    errorMessage = AppErrorSanitizer.formatSource(sourceResult.exceptionOrNull(), defaultCode = "ERR_PLY_004", defaultMessage = "Sinyal siaran terputus")
                 )
             }
         }

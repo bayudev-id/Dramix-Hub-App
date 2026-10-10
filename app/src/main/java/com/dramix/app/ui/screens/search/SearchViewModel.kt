@@ -2,6 +2,7 @@ package com.dramix.app.ui.screens.search
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.dramix.app.core.network.AppErrorSanitizer
 import com.dramix.app.data.source.local.ProviderPreferences
 import com.dramix.app.data.source.local.SearchPreferences
 import com.dramix.app.domain.model.ProviderModel
@@ -243,7 +244,7 @@ class SearchViewModel(
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     isLoadingMore = false,
-                    errorMessage = result.exceptionOrNull()?.localizedMessage ?: "Pencarian gagal"
+                    errorMessage = AppErrorSanitizer.formatSearch(result.exceptionOrNull())
                 )
             }
         }

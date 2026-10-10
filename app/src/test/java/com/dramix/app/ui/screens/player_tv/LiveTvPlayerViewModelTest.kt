@@ -225,7 +225,7 @@ class LiveTvPlayerViewModelTest {
 
         val state = viewModel.uiState.value
         assertTrue(state.isStreamError)
-        assertEquals("Sinyal satelit terputus", state.errorMessage)
+        assertEquals("[ERR_PLY_004] Sinyal satelit terputus", state.errorMessage)
 
         // Fix source failure and retry
         repo.shouldFailSource = false

@@ -18,6 +18,10 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -28,6 +32,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
@@ -41,6 +46,7 @@ import com.dramix.app.ui.theme.MidnightBorder
 import com.dramix.app.ui.theme.MidnightCard
 import com.dramix.app.ui.theme.PureBlack
 import com.dramix.app.ui.theme.Slate400
+import com.dramix.app.ui.theme.Slate50
 
 @Composable
 fun SearchScreen(
@@ -79,30 +85,56 @@ fun SearchScreen(
         }
 
         // Search Results / History Area
-        SearchResultGrid(
-            results = uiState.results,
-            isLoading = uiState.isLoading,
-            query = uiState.query,
-            selectedContentType = uiState.selectedContentType,
-            selectedProviderId = uiState.selectedProviderId,
-            recentQueries = uiState.recentQueries,
-            hasMoreResults = uiState.hasMoreResults,
-            isLoadingMore = uiState.isLoadingMore,
-            onLoadMore = { viewModel.loadMoreResults() },
-            onSelectRecentQuery = { viewModel.selectRecentQuery(it) },
-            onDeleteRecentQuery = { viewModel.deleteRecentQuery(it) },
-            onClearAllRecentQueries = { viewModel.clearAllRecentQueries() },
-            onItemClick = { item ->
-                handleItemClick(
-                    item = item,
-                    selectedContentType = uiState.selectedContentType,
-                    selectedProviderId = uiState.selectedProviderId,
-                    onNavigateToVodPlayer = onNavigateToVodPlayer,
-                    onNavigateToShortsPlayer = onNavigateToShortsPlayer,
-                    onNavigateToLiveTvPlayer = onNavigateToLiveTvPlayer
-                )
+        if (uiState.errorMessage != null && !uiState.isLoading && uiState.results.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(32.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(
+                        imageVector = Icons.Default.Warning,
+                        contentDescription = "Error",
+                        tint = CrimsonPlay,
+                        modifier = Modifier.size(36.dp)
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Text(
+                        text = uiState.errorMessage!!,
+                        color = Slate50,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium,
+                        textAlign = TextAlign.Center
+                    )
+                }
             }
-        )
+        } else {
+            SearchResultGrid(
+                results = uiState.results,
+                isLoading = uiState.isLoading,
+                query = uiState.query,
+                selectedContentType = uiState.selectedContentType,
+                selectedProviderId = uiState.selectedProviderId,
+                recentQueries = uiState.recentQueries,
+                hasMoreResults = uiState.hasMoreResults,
+                isLoadingMore = uiState.isLoadingMore,
+                onLoadMore = { viewModel.loadMoreResults() },
+                onSelectRecentQuery = { viewModel.selectRecentQuery(it) },
+                onDeleteRecentQuery = { viewModel.deleteRecentQuery(it) },
+                onClearAllRecentQueries = { viewModel.clearAllRecentQueries() },
+                onItemClick = { item ->
+                    handleItemClick(
+                        item = item,
+                        selectedContentType = uiState.selectedContentType,
+                        selectedProviderId = uiState.selectedProviderId,
+                        onNavigateToVodPlayer = onNavigateToVodPlayer,
+                        onNavigateToShortsPlayer = onNavigateToShortsPlayer,
+                        onNavigateToLiveTvPlayer = onNavigateToLiveTvPlayer
+                    )
+                }
+            )
+        }
     }
 }
 

@@ -231,7 +231,7 @@ fun LiveTvPlayerScreen(
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            text = uiState.errorMessage ?: "Sinyal Siaran Terputus",
+                            text = uiState.errorMessage ?: "[ERR_PLY_004] Sinyal Siaran Terputus",
                             color = Slate50,
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.Medium,

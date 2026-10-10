@@ -9,6 +9,7 @@ import com.dramix.app.core.database.dao.WatchHistoryDao
 import com.dramix.app.core.database.entity.BookmarkEntity
 import com.dramix.app.core.database.entity.DownloadRecordEntity
 import com.dramix.app.core.database.entity.WatchHistoryEntity
+import com.dramix.app.core.network.AppErrorSanitizer
 import com.dramix.app.core.security.DeviceIdentifier
 import com.dramix.app.data.source.local.LicensePreferences
 import com.dramix.app.domain.repository.LicenseRepository
@@ -151,7 +152,7 @@ class ProfileViewModel(
                     activationErrorMessage = null
                 )
             } else {
-                val err = result.exceptionOrNull()?.localizedMessage ?: "Gagal mengaktivasi lisensi"
+                val err = AppErrorSanitizer.formatLicense(result.exceptionOrNull())
                 _uiState.value = _uiState.value.copy(
                     isActivating = false,
                     activationErrorMessage = err,

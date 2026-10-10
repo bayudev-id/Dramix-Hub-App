@@ -9,6 +9,7 @@ import com.dramix.app.core.database.entity.WatchHistoryEntity
 import com.dramix.app.domain.manager.EntitlementManager
 import com.dramix.app.domain.manager.PlaybackAccess
 import com.dramix.app.domain.model.DramaDetail
+import com.dramix.app.core.network.AppErrorSanitizer
 import com.dramix.app.domain.model.Episode
 import com.dramix.app.domain.model.PlaybackSource
 import com.dramix.app.domain.repository.CatalogRepository
@@ -68,7 +69,20 @@ class ShortsPlayerViewModel(
     private var prebufferJob: Job? = null
 
     init {
+        observePlaybackState()
         loadShortDramaFeed(initialProviderId, initialDramaId)
+    }
+
+    private fun observePlaybackState() {
+        viewModelScope.launch {
+            playerController.playbackState.collect { state ->
+                if (state is com.dramix.app.player.model.PlaybackState.Error) {
+                    _uiState.value = _uiState.value.copy(
+                        errorMessage = state.message
+                    )
+                }
+            }
+        }
     }
 
     fun loadShortDramaFeed(provId: String?, dramId: String?) {
@@ -122,7 +136,7 @@ class ShortsPlayerViewModel(
         if (detailResult.isFailure) {
             _uiState.value = _uiState.value.copy(
                 isLoading = false,
-                errorMessage = detailResult.exceptionOrNull()?.localizedMessage ?: "Gagal memuat detail drama"
+                errorMessage = AppErrorSanitizer.formatDetail(detailResult.exceptionOrNull())
             )
             return
         }
@@ -236,7 +250,7 @@ class ShortsPlayerViewModel(
                         )
                     } else {
                         _uiState.value = _uiState.value.copy(
-                            errorMessage = "Tidak ada stream video yang tersedia untuk episode ini"
+                            errorMessage = "[ERR_STR_002] Tidak ada stream video yang tersedia untuk episode ini"
                         )
                     }
                 }
@@ -249,7 +263,7 @@ class ShortsPlayerViewModel(
                     )
                 } else {
                     _uiState.value = _uiState.value.copy(
-                        errorMessage = sourceResult.exceptionOrNull()?.localizedMessage ?: "Gagal memuat stream"
+                        errorMessage = AppErrorSanitizer.formatSource(sourceResult.exceptionOrNull())
                     )
                 }
             }
@@ -319,7 +333,7 @@ class ShortsPlayerViewModel(
                         )
                     } else {
                         _uiState.value = _uiState.value.copy(
-                            errorMessage = "Tidak ada stream video yang tersedia untuk episode ini",
+                            errorMessage = "[ERR_STR_002] Tidak ada stream video yang tersedia untuk episode ini",
                             isRefreshing = false
                         )
                     }
@@ -334,7 +348,7 @@ class ShortsPlayerViewModel(
                     )
                 } else {
                     _uiState.value = _uiState.value.copy(
-                        errorMessage = sourceResult.exceptionOrNull()?.localizedMessage ?: "Gagal memuat stream",
+                        errorMessage = AppErrorSanitizer.formatSource(sourceResult.exceptionOrNull()),
                         isRefreshing = false
                     )
                 }

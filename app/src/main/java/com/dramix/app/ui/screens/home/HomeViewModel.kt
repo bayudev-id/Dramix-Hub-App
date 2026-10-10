@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.dramix.app.core.database.dao.WatchHistoryDao
 import com.dramix.app.core.database.entity.WatchHistoryEntity
 import com.dramix.app.data.source.local.ProviderConfigItem
+import com.dramix.app.core.network.AppErrorSanitizer
 import com.dramix.app.data.source.local.ProviderPreferences
 import com.dramix.app.data.source.local.UserProviderConfig
 import com.dramix.app.domain.model.Category
@@ -78,7 +79,7 @@ class HomeViewModel(
             if (providersResult.isFailure) {
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
-                    errorMessage = providersResult.exceptionOrNull()?.localizedMessage ?: "Gagal memuat provider"
+                    errorMessage = AppErrorSanitizer.formatCatalog(providersResult.exceptionOrNull(), defaultCode = "ERR_CAT_001")
                 )
                 return@launch
             }
@@ -396,7 +397,7 @@ class HomeViewModel(
                 isLoading = false,
                 isLoadingContent = false,
                 isLoadingMore = false,
-                errorMessage = feedResult.exceptionOrNull()?.localizedMessage ?: "Gagal memuat katalog video"
+                errorMessage = AppErrorSanitizer.formatCatalog(feedResult.exceptionOrNull(), defaultCode = "ERR_CAT_002")
             )
         }
     }
