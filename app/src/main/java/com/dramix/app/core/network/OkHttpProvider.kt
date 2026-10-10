@@ -5,12 +5,36 @@ import com.dramix.app.BuildConfig
 import com.dramix.app.core.security.DeviceIdentifier
 import okhttp3.Cache
 import okhttp3.CertificatePinner
+import okhttp3.Dispatcher
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import java.io.File
 import java.util.concurrent.TimeUnit
 
 object OkHttpProvider {
+
+    /**
+     * Dedicated high-concurrency OkHttpClient for Coil image loading.
+     *
+     * - maxRequestsPerHost: 32 (default is 5). Prevents grid image loading from
+     *   bottlenecking when 20+ covers are fetched concurrently from the same CDN host.
+     * - No SecurityHeadersInterceptor or logging to maximize image fetch throughput.
+     * - CdnRefererInterceptor preserved for MovieBox/Youku CDNs.
+     */
+    fun createImageClient(context: Context): OkHttpClient {
+        val dispatcher = Dispatcher().apply {
+            maxRequests = 64
+            maxRequestsPerHost = 32
+        }
+
+        return OkHttpClient.Builder()
+            .dispatcher(dispatcher)
+            .connectTimeout(10, TimeUnit.SECONDS)
+            .readTimeout(15, TimeUnit.SECONDS)
+            .writeTimeout(15, TimeUnit.SECONDS)
+            .addInterceptor(CdnRefererInterceptor())
+            .build()
+    }
 
     fun createClient(
         context: Context? = null,

@@ -23,9 +23,9 @@ class DramixApplication : Application() {
             }
         }
 
-        // Initialize global Coil ImageLoader with CdnRefererInterceptor and caching
-        val okHttpClient: OkHttpClient = get()
-        val imageLoader = CoilProvider.createImageLoader(this, okHttpClient)
+        // Initialize global Coil ImageLoader with dedicated high-concurrency client
+        val imageClient = com.dramix.app.core.network.OkHttpProvider.createImageClient(this)
+        val imageLoader = CoilProvider.createImageLoader(this, imageClient)
         Coil.setImageLoader(imageLoader)
     }
 }

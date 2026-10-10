@@ -39,6 +39,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.snapshotFlow
 import coil.request.ImageRequest
 import coil.size.Size
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -327,10 +328,6 @@ private fun SearchVideoCard(
         else -> 2f / 3f  // portrait (default)
     }
     
-    // 3-column layout: ~360dp width per card on mobile
-    val cardWidthPx = with(density) { 360.dp.roundToPx() }
-    val cardHeightPx = (cardWidthPx / aspectRatio).toInt()
-
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -343,11 +340,12 @@ private fun SearchVideoCard(
                 .clip(RoundedCornerShape(8.dp))
                 .background(MidnightCard)
         ) {
-            // Create ImageRequest with explicit size to reduce bandwidth
-            val imageRequest = ImageRequest.Builder(context)
-                .data(item.cover)
-                .size(Size(cardWidthPx, cardHeightPx))
-                .build()
+            val imageRequest = remember(item.cover) {
+                ImageRequest.Builder(context)
+                    .data(item.cover)
+                    .crossfade(false)
+                    .build()
+            }
 
             AsyncImage(
                 model = imageRequest,

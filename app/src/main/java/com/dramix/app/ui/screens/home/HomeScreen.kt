@@ -491,14 +491,12 @@ private fun ContinueWatchingSection(
                     .clickable { onItemClick(history) }
             ) {
                 val context = LocalContext.current
-                val density = LocalDensity.current
-                val cardWidthPx = with(density) { 180.dp.roundToPx() }
-                val cardHeightPx = (cardWidthPx * 9f / 16f).toInt()
-                
-                val imageRequest = ImageRequest.Builder(context)
-                    .data(history.dramaPoster)
-                    .size(Size(cardWidthPx, cardHeightPx))
-                    .build()
+                val imageRequest = remember(history.dramaPoster) {
+                    ImageRequest.Builder(context)
+                        .data(history.dramaPoster)
+                        .crossfade(false)
+                        .build()
+                }
 
                 AsyncImage(
                     model = imageRequest,
@@ -562,16 +560,12 @@ private fun PosterCard2x3(
     onClick: () -> Unit
 ) {
     val context = LocalContext.current
-    val density = LocalDensity.current
     
     // Provider-specific aspect ratios
     val aspectRatio = when {
         item.source?.equals("KissKH", ignoreCase = true) == true -> 16f / 9f  // landscape
         else -> 2f / 3f  // portrait (default)
     }
-    
-    val cardWidthPx = with(density) { 360.dp.roundToPx() }
-    val cardHeightPx = (cardWidthPx / aspectRatio).toInt()
 
     Column(
         modifier = Modifier
@@ -585,10 +579,12 @@ private fun PosterCard2x3(
                 .clip(RoundedCornerShape(8.dp))
                 .background(MidnightCard)
         ) {
-            val imageRequest = ImageRequest.Builder(context)
-                .data(item.cover)
-                .size(Size(cardWidthPx, cardHeightPx))
-                .build()
+            val imageRequest = remember(item.cover) {
+                ImageRequest.Builder(context)
+                    .data(item.cover)
+                    .crossfade(false)
+                    .build()
+            }
 
             AsyncImage(
                 model = imageRequest,
@@ -645,9 +641,6 @@ private fun PosterCard9x16(
     onClick: () -> Unit
 ) {
     val context = LocalContext.current
-    val density = LocalDensity.current
-    val cardWidthPx = with(density) { 360.dp.roundToPx() }
-    val cardHeightPx = (cardWidthPx * 16f / 9f).toInt()
 
     Column(
         modifier = Modifier
@@ -661,10 +654,12 @@ private fun PosterCard9x16(
                 .clip(RoundedCornerShape(8.dp))
                 .background(MidnightCard)
         ) {
-            val imageRequest = ImageRequest.Builder(context)
-                .data(item.cover)
-                .size(Size(cardWidthPx, cardHeightPx))
-                .build()
+            val imageRequest = remember(item.cover) {
+                ImageRequest.Builder(context)
+                    .data(item.cover)
+                    .crossfade(false)
+                    .build()
+            }
 
             AsyncImage(
                 model = imageRequest,

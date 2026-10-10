@@ -26,7 +26,7 @@ object CoilProvider {
         okHttpClient: OkHttpClient
     ): ImageLoader {
         return ImageLoader.Builder(context)
-            .crossfade(durationMillis = 250)
+            .crossfade(false)   // Instant render without 250ms fade delay for snappy poster grids
             .respectCacheHeaders(false)
             .memoryCache {
                 MemoryCache.Builder(context)
@@ -36,7 +36,7 @@ object CoilProvider {
             .diskCache {
                 DiskCache.Builder()
                     .directory(context.cacheDir.resolve("image_cache"))
-                    .maxSizePercent(0.02)   // 2% of storage
+                    .maxSizePercent(0.05)   // 5% of storage for persistent cover cache
                     .build()
             }
             .memoryCachePolicy(CachePolicy.ENABLED)
