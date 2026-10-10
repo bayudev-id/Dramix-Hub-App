@@ -83,6 +83,8 @@ data class VodPlayerUiState(
     val playbackSpeed: Float = 1.0f,
     val isAutoNext: Boolean = false,
     val videoZoom: String = "100%",
+    val portraitVideoZoom: String = "100%",
+    val fullscreenVideoZoom: String = "100%",
     val portraitSubtitleStyle: SubtitleStyleConfig = SubtitleStyleConfig(fontSizePx = 14),
     val fullscreenSubtitleStyle: SubtitleStyleConfig = SubtitleStyleConfig(fontSizePx = 20),
     val subtitleStyle: SubtitleStyleConfig = SubtitleStyleConfig(fontSizePx = 14)
@@ -122,8 +124,12 @@ class VodPlayerViewModel(
                 ?: SubtitleStyleConfig(fontSizePx = 14)
             val fullscreenStyle = playerPreferences?.getSubtitleStyle(isFullscreen = true)
                 ?: SubtitleStyleConfig(fontSizePx = 20)
+            val portraitZoom = playerPreferences?.getVideoZoom(isFullscreen = false) ?: "100%"
+            val fullscreenZoom = playerPreferences?.getVideoZoom(isFullscreen = true) ?: "100%"
             VodPlayerUiState(
-                videoZoom = playerPreferences?.getVideoZoom() ?: "100%",
+                videoZoom = portraitZoom,
+                portraitVideoZoom = portraitZoom,
+                fullscreenVideoZoom = fullscreenZoom,
                 playbackSpeed = playerPreferences?.getPlaybackSpeed() ?: 1.0f,
                 isAutoNext = playerPreferences?.isAutoNext() ?: false,
                 portraitSubtitleStyle = portraitStyle,
@@ -665,18 +671,38 @@ class VodPlayerViewModel(
         playerPreferences?.saveAutoNext(enabled)
     }
 
-    fun selectVideoZoom(zoom: String) {
-        _uiState.value = _uiState.value.copy(videoZoom = zoom)
-        playerPreferences?.saveVideoZoom(zoom)
+    fun selectVideoZoom(zoom: String, isFullscreen: Boolean = false) {
+        if (isFullscreen) {
+            _uiState.value = _uiState.value.copy(
+                fullscreenVideoZoom = zoom,
+                videoZoom = zoom
+            )
+        } else {
+            _uiState.value = _uiState.value.copy(
+                portraitVideoZoom = zoom,
+                videoZoom = zoom
+            )
+        }
+        playerPreferences?.saveVideoZoom(zoom, isFullscreen = isFullscreen)
     }
 
-    fun updateVideoZoom(delta: Int) {
-        val current = _uiState.value.videoZoom
+    fun updateVideoZoom(delta: Int, isFullscreen: Boolean = false) {
+        val current = if (isFullscreen) _uiState.value.fullscreenVideoZoom else _uiState.value.portraitVideoZoom
         val currentPct = current.removeSuffix("%").trim().toIntOrNull() ?: 100
         val newPct = (currentPct + delta).coerceIn(100, 300)
         val zoomStr = "${newPct}%"
-        _uiState.value = _uiState.value.copy(videoZoom = zoomStr)
-        playerPreferences?.saveVideoZoom(zoomStr)
+        if (isFullscreen) {
+            _uiState.value = _uiState.value.copy(
+                fullscreenVideoZoom = zoomStr,
+                videoZoom = zoomStr
+            )
+        } else {
+            _uiState.value = _uiState.value.copy(
+                portraitVideoZoom = zoomStr,
+                videoZoom = zoomStr
+            )
+        }
+        playerPreferences?.saveVideoZoom(zoomStr, isFullscreen = isFullscreen)
     }
 
     fun hasPreviousEpisode(): Boolean {

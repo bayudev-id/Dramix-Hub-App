@@ -13,6 +13,8 @@ class PlayerPreferences(private val context: Context) {
     companion object {
         private const val PREFS_NAME = "dramix_player_preferences"
         private const val KEY_VIDEO_ZOOM = "pref_video_zoom"
+        private const val KEY_VIDEO_ZOOM_PORTRAIT = "pref_video_zoom_portrait"
+        private const val KEY_VIDEO_ZOOM_FULLSCREEN = "pref_video_zoom_fullscreen"
         private const val KEY_PLAYBACK_SPEED = "pref_playback_speed"
         private const val KEY_AUTO_NEXT = "pref_auto_next"
         private const val KEY_PREFERRED_QUALITY = "pref_preferred_quality"
@@ -65,11 +67,23 @@ class PlayerPreferences(private val context: Context) {
         }
     }
 
-    fun getVideoZoom(): String = prefs.getString(KEY_VIDEO_ZOOM, "100%") ?: "100%"
-
-    fun saveVideoZoom(zoom: String) {
-        prefs.edit().putString(KEY_VIDEO_ZOOM, zoom).apply()
+    fun getVideoZoom(isFullscreen: Boolean = false): String {
+        val key = if (isFullscreen) KEY_VIDEO_ZOOM_FULLSCREEN else KEY_VIDEO_ZOOM_PORTRAIT
+        val saved = prefs.getString(key, null)
+        if (saved != null) return saved
+        return prefs.getString(KEY_VIDEO_ZOOM, "100%") ?: "100%"
     }
+
+    fun getVideoZoom(): String = getVideoZoom(isFullscreen = false)
+
+    fun saveVideoZoom(zoom: String, isFullscreen: Boolean = false) {
+        val key = if (isFullscreen) KEY_VIDEO_ZOOM_FULLSCREEN else KEY_VIDEO_ZOOM_PORTRAIT
+        prefs.edit()
+            .putString(key, zoom)
+            .apply()
+    }
+
+    fun saveVideoZoom(zoom: String) = saveVideoZoom(zoom, isFullscreen = false)
 
     fun getPlaybackSpeed(): Float = prefs.getFloat(KEY_PLAYBACK_SPEED, 1.0f)
 

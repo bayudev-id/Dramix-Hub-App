@@ -205,6 +205,10 @@ class VodPlayerViewModelTest {
     fun setup() {
         Dispatchers.setMain(testDispatcher)
         context = ApplicationProvider.getApplicationContext()
+        context.getSharedPreferences("dramix_player_preferences", Context.MODE_PRIVATE)
+            .edit()
+            .clear()
+            .commit()
         playerFactory = PlayerFactory(context, OkHttpClient())
     }
 
@@ -423,5 +427,52 @@ class VodPlayerViewModelTest {
         assertFalse(state.isLoadingPlayback)
 
         viewModel.release()
+    }
+
+    @Test
+    fun vodPlayer_adjusts_video_zoom_separately_for_portrait_and_fullscreen() = runTest {
+        val watchHistoryDao = FakeWatchHistoryDao()
+        val bookmarkDao = FakeBookmarkDao()
+        val licenseRepository = FakeLicenseRepository(vipActive = true)
+        val entitlementManager = EntitlementManager(licenseRepository)
+        val prefs = com.dramix.app.data.source.local.PlayerPreferences(context)
+
+        val viewModel = VodPlayerViewModel(
+            providerId = "wetv",
+            dramaId = "drama-101",
+            catalogRepository = FakeCatalogRepository(mockDetail),
+            watchHistoryDao = watchHistoryDao,
+            bookmarkDao = bookmarkDao,
+            entitlementManager = entitlementManager,
+            licenseRepository = licenseRepository,
+            playerFactory = playerFactory,
+            enablePlayerCache = false,
+            playerPreferences = prefs
+        )
+
+        try {
+            testDispatcher.scheduler.advanceTimeBy(1000)
+            testDispatcher.scheduler.runCurrent()
+
+            // Default zoom is 100% on both
+            assertEquals("100%", viewModel.uiState.value.portraitVideoZoom)
+            assertEquals("100%", viewModel.uiState.value.fullscreenVideoZoom)
+
+            // Increment zoom in portrait (+10%)
+            viewModel.updateVideoZoom(10, isFullscreen = false)
+            assertEquals("110%", viewModel.uiState.value.portraitVideoZoom)
+            assertEquals("100%", viewModel.uiState.value.fullscreenVideoZoom)
+            assertEquals("110%", prefs.getVideoZoom(isFullscreen = false))
+            assertEquals("100%", prefs.getVideoZoom(isFullscreen = true))
+
+            // Increment zoom in fullscreen (+25%)
+            viewModel.updateVideoZoom(25, isFullscreen = true)
+            assertEquals("110%", viewModel.uiState.value.portraitVideoZoom)
+            assertEquals("125%", viewModel.uiState.value.fullscreenVideoZoom)
+            assertEquals("110%", prefs.getVideoZoom(isFullscreen = false))
+            assertEquals("125%", prefs.getVideoZoom(isFullscreen = true))
+        } finally {
+            viewModel.release()
+        }
     }
 }

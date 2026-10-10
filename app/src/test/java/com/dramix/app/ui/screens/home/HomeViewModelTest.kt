@@ -372,4 +372,47 @@ class HomeViewModelTest {
         assertEquals(2, configs.size)
         assertFalse(configs.any { it.provider.id == "dramaboxbaru" })
     }
+
+    @Test
+    fun homeViewModel_pull_to_refresh_refetches_providers_and_drops_deactivated_provider() = runTest {
+        val repo = FakeCatalogRepository(
+            providersResult = Result.success(
+                listOf(
+                    ProviderModel(id = "wetv", name = "WeTV", contentType = "long_drama", status = "active"),
+                    ProviderModel(id = "viu", name = "VIU", contentType = "long_drama", status = "active")
+                )
+            )
+        )
+
+        val viewModel = HomeViewModel(
+            catalogRepository = repo,
+            watchHistoryDao = FakeWatchHistoryDao(),
+            providerPreferences = providerPreferences
+        )
+
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        // Initially both wetv and viu are present, wetv selected
+        assertEquals(2, viewModel.uiState.value.providers.size)
+        assertEquals("wetv", viewModel.uiState.value.selectedProviderId)
+
+        // Admin deactivates wetv on backend while user has app open
+        repo.providersResult = Result.success(
+            listOf(
+                ProviderModel(id = "wetv", name = "WeTV", contentType = "long_drama", status = "inactive"),
+                ProviderModel(id = "viu", name = "VIU", contentType = "long_drama", status = "active")
+            )
+        )
+
+        // User pulls down to refresh (triggers refreshHome)
+        viewModel.refreshHome()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        val refreshedState = viewModel.uiState.value
+        // wetv dropped dynamically from chip list without closing app
+        assertEquals(1, refreshedState.providers.size)
+        assertEquals("viu", refreshedState.providers[0].id)
+        // Automatically fell back to viu
+        assertEquals("viu", refreshedState.selectedProviderId)
+    }
 }

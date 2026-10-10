@@ -8,6 +8,12 @@ Format penulisan berpedoman pada [Keep a Changelog](https://keepachangelog.com/i
 ## [Unreleased]
 
 ### Added
+- **Pemisahan Preferensi & State Video Zoom Portrait vs Fullscreen (`PlayerPreferences.kt`, `VodPlayerViewModel.kt`, `VodPlayerScreen.kt`)**:
+  - Memisahkan persistensi zoom video ke dalam key terisolasi (`pref_video_zoom_portrait` dan `pref_video_zoom_fullscreen`) dengan fallback kompatibel ke key legacy `pref_video_zoom`.
+  - Memisahkan state UI pemutar di `VodPlayerUiState` (`portraitVideoZoom` dan `fullscreenVideoZoom`) sehingga pengaturan pembesaran layar di mode portrait tidak menimpa pengaturan di mode fullscreen landscape.
+- **Dukungan Dynamic Pull-to-Refresh Provider (`HomeViewModel.kt`, `HomeScreen.kt`)**:
+  - Menambahkan method `refreshHome()` yang memicu fetch ulang daftar provider dari server/database saat pengguna melakukan gesture pull-to-refresh di Homescreen.
+  - Memfilter ulang provider aktif dan memperbarui list chip secara dinamis, otomatis mendepak provider yang baru dinonaktifkan dan memilih provider pengganti jika provider terpilih menjadi inaktif tanpa perlu me-restart aplikasi.
 - **Validasi Status Provider Inaktif (`ProviderModel.isActive`)**:
   - Menambahkan property helper `isActive` pada model domain `ProviderModel` (`status.equals("active", ignoreCase = true)`).
   - Melakukan filter ketat pada `HomeScreen` (`ProviderChipsRow`), `HomeViewModel`, `ProviderPreferences` (`applyToProviders` & `getMergedConfigItems`), `SearchScreen` (`SearchProviderChipsRow`), `SearchViewModel`, `ShortsPlayerViewModel`, dan `LiveTvPlayerViewModel`.
@@ -40,6 +46,7 @@ Format penulisan berpedoman pada [Keep a Changelog](https://keepachangelog.com/i
 - **Category Validation Fallback**: Auto-fallback ke kategori pertama jika `lastCategoryId` tidak valid/tidak ditemukan di provider baru (fix untuk HTTP 502 saat ganti provider).
 
 ### Fixed
+- **Shimmer Layout Shift KissKH & Live TV (`HomeScreen.kt`)**: Menyesuaikan `FeedShimmerGrid` agar secara adaptif mengenali provider `kisskh` atau tipe konten `live_tv` dan merender grid shimmer 2-kolom dengan aspect ratio landscape 16:9 alih-alih 3-kolom portrait 2:3, mengeliminasi kedipan pergeseran layout (layout shift) saat feed selesai dimuat.
 - **Visual Stutter & Jeda Transisi Fullscreen Pertama Kali (`VodPlayerScreen.kt`)**: Menghilangkan unmount/re-inflate `VideoPlayerSurface` dengan menyatukan viewport pemutar ke dalam satu node pohon Compose persisten, mengubah modifier aspect ratio secara langsung tanpa memutus decoder hardware SurfaceView ExoPlayer.
 - **Constraint Padding `Scaffold` pada Rute Pemutar (`AppNavigation.kt`)**: Mem-bypass `innerPadding` bawaan Scaffold (di-set `PaddingValues(0.dp)`) ketika pengguna berada pada rute `vod_player`, mengeliminasi jeda animasi penyusutan System Bars saat rotasi landscape.
 - **Sinkronisasi Langsung Sembunyikan System Bars**: Mengeksekusi `insetsController.hide(systemBars())` secara sinkron langsung di dalam fungsi `toggleFullscreen()` alih-alih menunggunya di dalam `LaunchedEffect`.

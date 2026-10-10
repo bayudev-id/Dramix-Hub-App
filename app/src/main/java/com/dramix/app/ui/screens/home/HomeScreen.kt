@@ -188,7 +188,7 @@ fun HomeScreen(
                 isRefreshing = isRefreshing,
                 onRefresh = {
                     isRefreshing = true
-                    viewModel.refreshCurrentCategory()
+                    viewModel.refreshHome()
                 },
                 modifier = Modifier.fillMaxSize()
             ) {
@@ -246,7 +246,12 @@ fun HomeScreen(
 
                 if (uiState.isLoadingContent) {
                     item(key = "content_loading_shimmer") {
-                        FeedShimmerGrid(isShorts = uiState.selectedContentType == "short_drama")
+                        val isKissKH = uiState.selectedProviderId?.equals("kisskh", ignoreCase = true) == true
+                        val isLiveTv = uiState.selectedContentType == "live_tv"
+                        FeedShimmerGrid(
+                            isShorts = uiState.selectedContentType == "short_drama",
+                            isLandscape = isKissKH || isLiveTv
+                        )
                     }
                 } else if (uiState.categoryVideos.isEmpty()) {
                     item(key = "empty_category_state") {
@@ -694,8 +699,16 @@ private fun PosterCard9x16(
 }
 
 @Composable
-private fun FeedShimmerGrid(isShorts: Boolean) {
-    val aspectRatio = if (isShorts) 9f / 16f else 2f / 3f
+private fun FeedShimmerGrid(
+    isShorts: Boolean,
+    isLandscape: Boolean = false
+) {
+    val columns = if (isLandscape) 2 else 3
+    val aspectRatio = when {
+        isShorts -> 9f / 16f
+        isLandscape -> 16f / 9f
+        else -> 2f / 3f
+    }
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -707,7 +720,7 @@ private fun FeedShimmerGrid(isShorts: Boolean) {
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                repeat(3) {
+                repeat(columns) {
                     ShimmerPlaceholder(
                         modifier = Modifier
                             .weight(1f)

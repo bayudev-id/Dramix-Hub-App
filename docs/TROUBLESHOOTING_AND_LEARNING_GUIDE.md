@@ -12,6 +12,10 @@ Dokumen ini mendokumentasikan secara rinci analisis akar masalah (*root cause an
 5. [Kasus 5: Inadvertent Git Reset & Pencegahan Kehilangan Kode](#kasus-5-inadvertent-git-reset--pencegahan-kehilangan-kode)
 6. [Kasus 6: Visual Stutter & Lagging Transisi Fullscreen (Compose Unmount & Insets Race Condition)](#kasus-6-visual-stutter--lagging-transisi-fullscreen-compose-unmount--insets-race-condition)
 7. [Kasus 7: Migrasi Versioning Subtitle Preferences & Boundary Stepper Controls](#kasus-7-migrasi-versioning-subtitle-preferences--boundary-stepper-controls)
+8. [Kasus 8: Filter Provider Inaktif pada Homescreen & Layer Preferensi Klien (Database Inactive Status Whitelist)](#kasus-8-filter-provider-inaktif-pada-homescreen--layer-preferensi-klien-database-inactive-status-whitelist)
+9. [Kasus 9: Shimmer Loading KissKH & Live TV (Grid Column Mismatch 3-Kolom Portrait vs 2-Kolom Landscape)](#kasus-9-shimmer-loading-kisskh--live-tv-grid-column-mismatch-3-kolom-portrait-vs-2-kolom-landscape)
+10. [Kasus 10: Sinkronisasi Status Provider Dinamis pada Pull-to-Refresh Homescreen (Tanpa Restart Aplikasi)](#kasus-10-sinkronisasi-status-provider-dinamis-pada-pull-to-refresh-homescreen-tanpa-restart-aplikasi)
+11. [Kasus 11: Independensi & Dekomposisi State Video Zoom Portrait vs Fullscreen (Isolated Preferences Storage)](#kasus-11-independensi--dekomposisi-state-video-zoom-portrait-vs-fullscreen-isolated-preferences-storage)
 
 ---
 
@@ -524,3 +528,132 @@ fun selectProvider(providerId: String) {
 ### Pencegahan ke Depan
 - **Prinsip Defense in Depth**: Jangan hanya mengandalkan filter di sisi server. Selalu terapkan filter status di model domain klien dan di level komponen UI perenderan.
 - **Unit Test Komprehensif**: Sertakan skenario pengujian dengan data mock yang berisi provider `active` dan `inactive` untuk memastikan entitas inaktif tidak lolos ke state UI.
+
+---
+
+## Kasus 9: Shimmer Loading KissKH & Live TV (Grid Column Mismatch 3-Kolom Portrait vs 2-Kolom Landscape)
+
+### Gejala Masalah
+1. Saat pengguna berpindah ke provider **KissKH** atau tab berkategori konten landscape/Live TV, kartu skeleton shimmer yang muncul saat loading awal berformat **3 kolom portrait** (aspect ratio 2:3).
+2. Ketika respons feed selesai dimuat dari backend, tampilan tiba-tiba berubah secara drastis (*layout shift / jarring jump*) menjadi **2 kolom landscape** (aspect ratio 16:9).
+3. Transisi visual tersebut tampak kasar dan mengurangi kualitas polish antarmuka aplikasi.
+
+### Akar Masalah (Root Cause)
+1. **Komponen Shimmer Statis**: `FeedShimmerGrid` di `HomeScreen.kt` dikonfigurasi secara hardcoded menggunakan `GridCells.Fixed(3)` dan kartu item berskala portrait (`aspectRatio(2f / 3f)`).
+2. **Ketiadaan Konteks Provider pada State Loading**: Saat kategori sedang dimuat (`isLoadingFeed = true`), `HomeScreen` tidak meneruskan ID provider atau flag tipe konten ke fungsi `FeedShimmerGrid`, sehingga komponen perender skeleton tidak dapat mengadaptasi tata letak kolomnya dengan bentuk konten aktual yang akan datang.
+
+### Solusi & Implementasi
+1. Teruskan parameter `providerId` dan `contentType` ke dalam `FeedShimmerGrid`.
+2. Hitung kondisi tata letak landscape secara adaptif:
+   ```kotlin
+   val isKissKH = providerId?.equals("kisskh", ignoreCase = true) == true
+   val isLiveTv = contentType.equals("live_tv", ignoreCase = true)
+   val isLandscape = isKissKH || isLiveTv
+   val columns = if (isLandscape) 2 else 3
+   val cardAspectRatio = if (isLandscape) 16f / 9f else 2f / 3f
+   ```
+3. Gunakan `GridCells.Fixed(columns)` dan aplikasikan `cardAspectRatio` pada setiap kartu shimmer.
+
+### Pencegahan ke Depan
+- **Satu Desain Sesuai Realita Output**: Komponen loading skeleton/shimmer harus selalu mencerminkan struktur grid dan rasio aspek dari data aktual yang akan dirender agar layout shift tidak terjadi (*zero visual jumping*).
+
+---
+
+## Kasus 10: Sinkronisasi Status Provider Dinamis pada Pull-to-Refresh Homescreen (Tanpa Restart Aplikasi)
+
+### Gejala Masalah
+1. Ketika status suatu provider dinonaktifkan di panel admin/database PocketBase saat aplikasi sedang berjalan, pengguna masih melihat chip provider tersebut di HomeScreen.
+2. Melakukan gesture **Tarik ke Bawah (Pull-to-Refresh)** hanya me-refresh item video kategori saat ini (`refreshCurrentCategory()`), namun tidak memperbarui daftar chip provider.
+3. Pengguna terpaksa harus mematikan dan membuka ulang aplikasi (*force restart*) agar chip provider yang inaktif menghilang.
+
+### Akar Masalah (Root Cause)
+1. **Scope Refresh Terlalu Sempit**: Pull-to-refresh di `HomeScreen.kt` hanya memanggil `viewModel.refreshCurrentCategory()`.
+2. **Fetch Provider Hanya di `init`**: `HomeViewModel` hanya memanggil `catalogRepository.getProviders()` sekali pada blok `init`. Tidak ada mekanisme untuk memvalidasi ulang daftar provider aktif saat lifecycle berjalan.
+
+### Solusi & Implementasi
+1. Tambahkan metode `refreshHome()` di `HomeViewModel.kt`:
+   ```kotlin
+   fun refreshHome() {
+       viewModelScope.launch {
+           _uiState.value = _uiState.value.copy(isRefreshing = true)
+           try {
+               val rawProviders = catalogRepository.getProviders()
+               val activeProviders = providerPreferences.applyToProviders(rawProviders)
+                   .filter { it.isActive }
+               
+               val currentSelected = _uiState.value.selectedProviderId
+               val providerStillActive = activeProviders.any { it.id == currentSelected }
+               val targetProvider = if (providerStillActive) {
+                   currentSelected
+               } else {
+                   activeProviders.firstOrNull()?.id
+               }
+
+               _uiState.value = _uiState.value.copy(
+                   providers = activeProviders,
+                   selectedProviderId = targetProvider
+               )
+
+               if (targetProvider != null) {
+                   loadCategoriesForProvider(targetProvider)
+               }
+           } catch (e: Exception) {
+               // Fallback ke refresh kategori saat ini jika gagal fetch provider
+               refreshCurrentCategory()
+           } finally {
+               _uiState.value = _uiState.value.copy(isRefreshing = false)
+           }
+       }
+   }
+   ```
+2. Hubungkan `HomeScreen.kt` pull-to-refresh listener ke `viewModel.refreshHome()`.
+
+### Pencegahan ke Depan
+- **Refresh Komprehensif**: Tindakan pull-to-refresh pada layar root/katalog utama harus menyegarkan konfigurasi struktural (ketersediaan provider) selain hanya menyegarkan item feed anak.
+
+---
+
+## Kasus 11: Independensi & Dekomposisi State Video Zoom Portrait vs Fullscreen (Isolated Preferences Storage)
+
+### Gejala Masalah
+1. Pengaturan video zoom (misal 100%, 110%, 125%, dst.) yang diubah saat video diputar di mode portrait (rasio vertikal) ikut diterapkan ketika video diputar di mode landscape/fullscreen.
+2. Pengguna sering kali menginginkan rasio pembesaran berbeda untuk kedua orientasi: di portrait biasanya 100% (fit) agar tidak terpotong, sedangkan di fullscreen landscape sering disetel ke 110%–125% untuk menghilangkan letterbox hitam pada layar rasio 20:9.
+3. Menyimpan zoom di portrait menimpa pengaturan zoom fullscreen, dan sebaliknya.
+
+### Akar Masalah (Root Cause)
+1. **Shared Single Preference Key**: `PlayerPreferences.kt` hanya menyimpan zoom pada satu key umum `pref_video_zoom`.
+2. **Monolitik UI State**: `VodPlayerUiState` hanya memiliki satu field `videoZoom: String = "100%"`.
+3. **Ketiadaan Orientasi Target**: Fungsi `updateVideoZoom(delta)` dan `selectVideoZoom(zoom)` tidak mengetahui apakah aksi pembesaran dipicu dari controller portrait atau fullscreen.
+
+### Solusi & Implementasi Multi-Layer
+1. **Dekomposisi Key Preferences (`PlayerPreferences.kt`)**:
+   ```kotlin
+   private const val KEY_VIDEO_ZOOM_PORTRAIT = "pref_video_zoom_portrait"
+   private const val KEY_VIDEO_ZOOM_FULLSCREEN = "pref_video_zoom_fullscreen"
+
+   fun getVideoZoom(isFullscreen: Boolean = false): String {
+       val key = if (isFullscreen) KEY_VIDEO_ZOOM_FULLSCREEN else KEY_VIDEO_ZOOM_PORTRAIT
+       val saved = prefs.getString(key, null)
+       if (saved != null) return saved
+       return prefs.getString(KEY_VIDEO_ZOOM, "100%") ?: "100%"
+   }
+
+   fun saveVideoZoom(zoom: String, isFullscreen: Boolean = false) {
+       val key = if (isFullscreen) KEY_VIDEO_ZOOM_FULLSCREEN else KEY_VIDEO_ZOOM_PORTRAIT
+       prefs.edit().putString(key, zoom).apply()
+   }
+   ```
+2. **Dekomposisi UI State (`VodPlayerViewModel.kt`)**:
+   Pisahkan `portraitVideoZoom` dan `fullscreenVideoZoom` di `VodPlayerUiState`. Saat inisialisasi, baca masing-masing nilai dari preferences. Saat update, perbarui state dan preferences khusus untuk orientasi aktif (`isFullscreen`).
+3. **Binding di UI Layar Pemutar (`VodPlayerScreen.kt`)**:
+   Oper nilai zoom yang sesuai ke `VideoPlayerSurface`:
+   ```kotlin
+   val activeZoom = if (isFullscreen) uiState.fullscreenVideoZoom else uiState.portraitVideoZoom
+   VideoPlayerSurface(
+       ...
+       videoZoom = activeZoom
+   )
+   ```
+
+### Pencegahan ke Depan
+- **Orientasi-Aware State**: Properti pemutar yang memiliki preferensi ergonomis berbeda antara orientasi vertikal dan horizontal (seperti ukuran font subtitle, margin subtitle, dan rasio zoom video) wajib dipisahkan baik di tingkat UI state maupun persistence layer.

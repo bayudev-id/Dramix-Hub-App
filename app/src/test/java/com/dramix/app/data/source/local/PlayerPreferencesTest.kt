@@ -60,6 +60,15 @@ class PlayerPreferencesTest {
     }
 
     @Test
+    fun saveAndGetVideoZoom_portraitAndFullscreen_persistSeparately() {
+        preferences.saveVideoZoom("110%", isFullscreen = false)
+        preferences.saveVideoZoom("135%", isFullscreen = true)
+
+        assertEquals("110%", preferences.getVideoZoom(isFullscreen = false))
+        assertEquals("135%", preferences.getVideoZoom(isFullscreen = true))
+    }
+
+    @Test
     fun saveAndGetPlaybackSpeed_persistsCorrectly() {
         preferences.savePlaybackSpeed(1.5f)
         assertEquals(1.5f, preferences.getPlaybackSpeed(), 0.01f)

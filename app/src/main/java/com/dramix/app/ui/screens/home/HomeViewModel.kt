@@ -366,28 +366,75 @@ class HomeViewModel(
         loadCategoryVideos(providerId, validCategoryId)
     }
 
-    fun refreshCurrentCategory() {
-        val providerId = _uiState.value.selectedProviderId ?: return
-        val categoryId = _uiState.value.selectedCategoryId
-
-        if (categoryId.isNullOrBlank() || _uiState.value.categories.isEmpty()) {
-            viewModelScope.launch {
-                loadProviderCategoriesAndFeed(providerId, null)
-            }
-            return
-        }
-
-        _uiState.value = _uiState.value.copy(
-            categoryVideos = emptyList(),
-            currentPage = 1,
-            hasMoreContent = false,
-            isLoadingMore = false,
-            isLoadingContent = true
-        )
-
+    fun refreshHome() {
         viewModelScope.launch {
-            loadCategoryVideos(providerId, categoryId)
+            _uiState.value = _uiState.value.copy(
+                isLoadingContent = true,
+                errorMessage = null
+            )
+
+            val providersResult = catalogRepository.getProviders()
+            if (providersResult.isFailure) {
+                _uiState.value = _uiState.value.copy(
+                    isLoadingContent = false,
+                    errorMessage = AppErrorSanitizer.formatCatalog(providersResult.exceptionOrNull(), defaultCode = "ERR_CAT_001")
+                )
+                return@launch
+            }
+
+            val fetchedProviders = providersResult.getOrDefault(emptyList())
+            rawProviders = fetchedProviders.filter { it.isActive }
+            val effectiveProviders = providerPreferences.applyToProviders(rawProviders).filter { it.isActive }
+            val contentTypes = buildContentTypes(effectiveProviders)
+
+            val currentContentType = _uiState.value.selectedContentType
+            val validContentType = if (currentContentType != null && contentTypes.any { it.id == currentContentType }) {
+                currentContentType
+            } else {
+                effectiveProviders.firstOrNull()?.contentType ?: contentTypes.firstOrNull()?.id
+            }
+
+            val filteredProviders = if (validContentType != null) {
+                effectiveProviders.filter { it.contentType == validContentType }
+            } else {
+                effectiveProviders
+            }
+
+            val currentProviderId = _uiState.value.selectedProviderId
+            val validProvider = if (currentProviderId != null && filteredProviders.any { it.id == currentProviderId }) {
+                filteredProviders.first { it.id == currentProviderId }
+            } else {
+                filteredProviders.firstOrNull()
+            }
+
+            _uiState.value = _uiState.value.copy(
+                contentTypes = contentTypes,
+                selectedContentType = validContentType,
+                providers = effectiveProviders,
+                filteredProviders = filteredProviders,
+                selectedProviderId = validProvider?.id
+            )
+
+            if (validProvider != null) {
+                providerPreferences.saveLastSelection(
+                    contentType = validContentType,
+                    providerId = validProvider.id,
+                    categoryId = _uiState.value.selectedCategoryId
+                )
+                loadProviderCategoriesAndFeed(validProvider.id, _uiState.value.selectedCategoryId)
+            } else {
+                _uiState.value = _uiState.value.copy(
+                    categories = emptyList(),
+                    selectedCategoryId = null,
+                    categoryVideos = emptyList(),
+                    isLoadingContent = false
+                )
+            }
         }
+    }
+
+    fun refreshCurrentCategory() {
+        refreshHome()
     }
 
     private suspend fun loadCategoryVideos(providerId: String, categoryId: String) {

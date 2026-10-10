@@ -202,6 +202,7 @@ fun VodPlayerScreen(
     }
 
     val activeSubtitleStyle = if (isFullscreen) uiState.fullscreenSubtitleStyle else uiState.portraitSubtitleStyle
+    val activeVideoZoom = if (isFullscreen) uiState.fullscreenVideoZoom else uiState.portraitVideoZoom
 
     Box(
         modifier = modifier
@@ -232,7 +233,7 @@ fun VodPlayerScreen(
                     modifier = Modifier.fillMaxSize(),
                     useController = false,
                     subtitleStyle = activeSubtitleStyle,
-                    videoZoom = uiState.videoZoom
+                    videoZoom = activeVideoZoom
                 )
 
                 if (!uiState.selectedSubtitleId.equals("off", ignoreCase = true) && currentSubtitle != null) {
@@ -275,8 +276,8 @@ fun VodPlayerScreen(
                     hasNextEpisode = hasNextEpisode,
                     onPlayPreviousEpisode = { viewModel.playPreviousEpisode() },
                     onPlayNextEpisode = { viewModel.playNextEpisode() },
-                    videoZoom = uiState.videoZoom,
-                    onUpdateZoom = { delta -> viewModel.updateVideoZoom(delta) },
+                    videoZoom = activeVideoZoom,
+                    onUpdateZoom = { delta -> viewModel.updateVideoZoom(delta, isFullscreen = isFullscreen) },
                     subtitleStyle = activeSubtitleStyle,
                     onSelectFontFamily = { f -> viewModel.selectSubtitleFontFamily(f, isFullscreen = isFullscreen) },
                     onSelectOutlineStyle = { o -> viewModel.selectSubtitleOutlineStyle(o, isFullscreen = isFullscreen) },
