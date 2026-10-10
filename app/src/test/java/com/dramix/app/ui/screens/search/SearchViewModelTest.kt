@@ -172,6 +172,38 @@ class SearchViewModelTest {
 
         assertEquals("dramabox", repo.lastSearchModelId)
         assertEquals("dramabox", viewModel.uiState.value.selectedProviderId)
+        assertEquals(1, viewModel.uiState.value.currentPage)
+    }
+
+    @Test
+    fun switching_provider_resets_page_and_clears_old_results() = runTest {
+        val repo = FakeSearchCatalogRepository(mockProviders, mockSearchResults)
+        val viewModel = SearchViewModel(repo, searchPreferences)
+
+        testDispatcher.scheduler.advanceTimeBy(100)
+        testDispatcher.scheduler.runCurrent()
+
+        // Search on default provider (wetv)
+        viewModel.searchImmediately("Love")
+        testDispatcher.scheduler.advanceTimeBy(100)
+        testDispatcher.scheduler.runCurrent()
+
+        assertEquals("wetv", repo.lastSearchModelId)
+        assertEquals(2, viewModel.uiState.value.results.size)
+
+        // Switch to dramabox while scrolled / with active results
+        viewModel.onProviderChange("dramabox")
+
+        // Immediately after change: state is reset to page 1
+        assertEquals("dramabox", viewModel.uiState.value.selectedProviderId)
+        assertEquals(1, viewModel.uiState.value.currentPage)
+
+        // After fetch completes
+        testDispatcher.scheduler.advanceTimeBy(100)
+        testDispatcher.scheduler.runCurrent()
+
+        assertEquals("dramabox", repo.lastSearchModelId)
+        assertEquals(1, viewModel.uiState.value.currentPage)
     }
 
     @Test

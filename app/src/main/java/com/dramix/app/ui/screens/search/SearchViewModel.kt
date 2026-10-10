@@ -125,31 +125,44 @@ class SearchViewModel(
 
     fun onContentTypeChange(contentType: String?) {
         if (_uiState.value.selectedContentType == contentType) return
-        _uiState.value = _uiState.value.copy(selectedContentType = contentType)
-
         val currentQuery = _uiState.value.query.trim()
-        if (currentQuery.isNotBlank()) {
+        val willSearch = currentQuery.isNotBlank()
+        _uiState.value = _uiState.value.copy(
+            selectedContentType = contentType,
+            results = emptyList(),
+            isLoading = willSearch,
+            currentPage = 1,
+            hasMoreResults = false,
+            isLoadingMore = false,
+            errorMessage = null
+        )
+
+        if (willSearch) {
             executeSearch(
                 query = currentQuery,
                 contentType = contentType,
                 providerId = _uiState.value.selectedProviderId,
-                saveToHistory = false
+                saveToHistory = false,
+                page = 1
             )
         }
     }
 
     fun onProviderChange(providerId: String) {
         if (_uiState.value.selectedProviderId == providerId) return
+        val currentQuery = _uiState.value.query.trim()
+        val willSearch = currentQuery.isNotBlank()
         _uiState.value = _uiState.value.copy(
             selectedProviderId = providerId,
             results = emptyList(),
+            isLoading = willSearch,
             currentPage = 1,
             hasMoreResults = false,
-            isLoadingMore = false
+            isLoadingMore = false,
+            errorMessage = null
         )
 
-        val currentQuery = _uiState.value.query.trim()
-        if (currentQuery.isNotBlank()) {
+        if (willSearch) {
             executeSearch(
                 query = currentQuery,
                 contentType = _uiState.value.selectedContentType,
