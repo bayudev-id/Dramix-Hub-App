@@ -8,6 +8,10 @@ Format penulisan berpedoman pada [Keep a Changelog](https://keepachangelog.com/i
 ## [Unreleased]
 
 ### Added
+- **Validasi Status Provider Inaktif (`ProviderModel.isActive`)**:
+  - Menambahkan property helper `isActive` pada model domain `ProviderModel` (`status.equals("active", ignoreCase = true)`).
+  - Melakukan filter ketat pada `HomeScreen` (`ProviderChipsRow`), `HomeViewModel`, `ProviderPreferences` (`applyToProviders` & `getMergedConfigItems`), `SearchScreen` (`SearchProviderChipsRow`), `SearchViewModel`, `ShortsPlayerViewModel`, dan `LiveTvPlayerViewModel`.
+  - Provider yang berstatus `inactive` pada database/gateway tidak akan pernah dirender pada deretan chip HomeScreen, sheet kustomisasi provider, maupun deretan chip Search.
 - **Fallback Placeholder Gambar Pencarian (`SearchResultGrid.kt`)**: Menambahkan listener error handling pada Coil `ImageRequest` dan merender kartu cadangan dengan ikon `Icons.Default.Movie` berwarna slate ketika URL cover null, kosong, atau gagal dimuat oleh CDN.
 - **Skema Migrasi Subtitle Preferences (`PlayerPreferences.kt`)**: Menambahkan `KEY_SUBTITLE_CONFIG_VERSION` dengan mekanisme auto-migrasi (`CURRENT_SUBTITLE_VERSION = 2`) untuk menimpa preferensi usang dengan nilai default terstandarisasi.
 - **Short Edges Display Cutout (`MainActivity.kt`)**: Mengonfigurasi `layoutInDisplayCutoutMode = LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES` pada level window untuk memastikan konten video membentang langsung melintasi area kamera depan/notch tanpa komputasi tunda.

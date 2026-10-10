@@ -91,7 +91,7 @@ class ShortsPlayerViewModel(
 
             val effectiveProviderId = if (provId.isNullOrBlank()) {
                 val providers = catalogRepository.getProviders().getOrNull() ?: emptyList()
-                providers.firstOrNull { it.contentType == "short_drama" }?.id ?: "freereels"
+                providers.firstOrNull { it.contentType == "short_drama" && it.isActive }?.id ?: "freereels"
             } else {
                 provId
             }

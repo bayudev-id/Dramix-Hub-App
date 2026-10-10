@@ -65,17 +65,18 @@ class HomeViewModelTest {
 
     private class FakeCatalogRepository(
         var categoriesResult: Result<List<Category>> = Result.success(listOf(Category(id = "1001", name = "Untukmu"))),
-        var lastRequestedCategoryId: String? = null
-    ) : CatalogRepository {
-        var getCategoriesCallCount = 0
-
-        override suspend fun getProviders(): Result<List<ProviderModel>> = Result.success(
+        var providersResult: Result<List<ProviderModel>> = Result.success(
             listOf(
                 ProviderModel(id = "wetv", name = "WeTV", contentType = "long_drama"),
                 ProviderModel(id = "freereels", name = "FreeReels", contentType = "short_drama"),
                 ProviderModel(id = "viu", name = "VIU", contentType = "long_drama")
             )
-        )
+        ),
+        var lastRequestedCategoryId: String? = null
+    ) : CatalogRepository {
+        var getCategoriesCallCount = 0
+
+        override suspend fun getProviders(): Result<List<ProviderModel>> = providersResult
 
         override suspend fun getCategories(modelId: String): Result<List<Category>> {
             getCategoriesCallCount++
@@ -321,5 +322,54 @@ class HomeViewModelTest {
         val resetState = viewModel.uiState.value
         assertEquals(3, resetState.providers.size)
         assertEquals("wetv", resetState.providers[0].id)
+    }
+
+    @Test
+    fun homeViewModel_filters_out_inactive_providers_from_database() = runTest {
+        val repo = FakeCatalogRepository(
+            providersResult = Result.success(
+                listOf(
+                    ProviderModel(id = "wetv", name = "WeTV", contentType = "long_drama", status = "active"),
+                    ProviderModel(id = "dramaboxbaru", name = "DramaBoxBaru", contentType = "short_drama", status = "inactive"),
+                    ProviderModel(id = "freereels", name = "FreeReels", contentType = "short_drama", status = "active"),
+                    ProviderModel(id = "broken_prov", name = "Broken", contentType = "long_drama", status = "INACTIVE")
+                )
+            )
+        )
+
+        val viewModel = HomeViewModel(
+            catalogRepository = repo,
+            watchHistoryDao = FakeWatchHistoryDao(),
+            providerPreferences = providerPreferences
+        )
+
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        // Only active providers should be available
+        assertEquals(2, state.providers.size)
+        assertFalse("dramaboxbaru tidak boleh muncul", state.providers.any { it.id == "dramaboxbaru" })
+        assertFalse("broken_prov tidak boleh muncul", state.providers.any { it.id == "broken_prov" })
+        assertTrue("wetv harus muncul", state.providers.any { it.id == "wetv" })
+        assertTrue("freereels harus muncul", state.providers.any { it.id == "freereels" })
+
+        // Switch to short_drama: only freereels should be in filteredProviders
+        viewModel.selectContentType("short_drama")
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        val shortState = viewModel.uiState.value
+        assertEquals(1, shortState.filteredProviders.size)
+        assertEquals("freereels", shortState.filteredProviders[0].id)
+        assertEquals("freereels", shortState.selectedProviderId)
+
+        // Attempting to select inactive provider should be ignored
+        viewModel.selectProvider("dramaboxbaru")
+        testDispatcher.scheduler.advanceUntilIdle()
+        assertEquals("freereels", viewModel.uiState.value.selectedProviderId)
+
+        // Customizer configs must also exclude inactive providers
+        val configs = viewModel.getAllProviderConfigs()
+        assertEquals(2, configs.size)
+        assertFalse(configs.any { it.provider.id == "dramaboxbaru" })
     }
 }

@@ -93,4 +93,27 @@ class ProviderPreferencesTest {
         assertEquals(sampleRawProviders.size, result.size)
         assertEquals("wetv", result[0].id)
     }
+
+    @Test
+    fun applyToProviders_filtersOutInactiveProviders() {
+        val mixedProviders = listOf(
+            ProviderModel(id = "wetv", name = "WeTV", status = "active"),
+            ProviderModel(id = "dramaboxbaru", name = "DramaBoxBaru", status = "inactive"),
+            ProviderModel(id = "viu", name = "VIU", status = "active")
+        )
+        val result = preferences.applyToProviders(mixedProviders)
+        assertEquals(2, result.size)
+        assertFalse(result.any { it.id == "dramaboxbaru" })
+    }
+
+    @Test
+    fun getMergedConfigItems_filtersOutInactiveProviders() {
+        val mixedProviders = listOf(
+            ProviderModel(id = "wetv", name = "WeTV", status = "active"),
+            ProviderModel(id = "dramaboxbaru", name = "DramaBoxBaru", status = "inactive")
+        )
+        val result = preferences.getMergedConfigItems(mixedProviders)
+        assertEquals(1, result.size)
+        assertEquals("wetv", result[0].provider.id)
+    }
 }

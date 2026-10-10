@@ -402,12 +402,15 @@ private fun ProviderChipsRow(
     selectedProviderId: String?,
     onProviderSelected: (String) -> Unit
 ) {
+    val activeProviders = remember(providers) {
+        providers.filter { it.isActive }
+    }
     val listState = rememberLazyListState()
 
     // Auto-scroll to selected provider (centered)
-    LaunchedEffect(selectedProviderId) {
+    LaunchedEffect(selectedProviderId, activeProviders) {
         selectedProviderId?.let { selected ->
-            val selectedIndex = providers.indexOfFirst { it.id == selected }
+            val selectedIndex = activeProviders.indexOfFirst { it.id == selected }
             if (selectedIndex >= 0) {
                 listState.animateToCentered(selectedIndex)
             }
@@ -420,7 +423,7 @@ private fun ProviderChipsRow(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        items(providers, key = { it.id }) { provider ->
+        items(activeProviders, key = { it.id }) { provider ->
             val isSelected = provider.id == selectedProviderId
             Box(
                 modifier = Modifier

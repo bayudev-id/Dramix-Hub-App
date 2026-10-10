@@ -35,14 +35,22 @@ class PlayerPreferencesTest {
         assertEquals(1.0f, preferences.getPlaybackSpeed(), 0.01f)
         assertFalse(preferences.isAutoNext())
         val portraitStyle = preferences.getSubtitleStyle(isFullscreen = false)
-        assertEquals("Comic Sans MS", portraitStyle.fontFamily)
-        assertEquals("Thin", portraitStyle.outlineStyle)
-        assertEquals(20, portraitStyle.fontSizePx)
+        assertEquals("Arial", portraitStyle.fontFamily)
+        assertEquals("Medium", portraitStyle.outlineStyle)
+        assertEquals(14, portraitStyle.fontSizePx)
         assertEquals(10, portraitStyle.positionPercent)
-        assertEquals(50, portraitStyle.backgroundOpacityPercent)
+        assertEquals(0, portraitStyle.backgroundOpacityPercent)
+        assertEquals(0, portraitStyle.lineSpacingPx)
+        assertEquals(0, portraitStyle.backgroundPaddingPx)
 
         val fsStyle = preferences.getSubtitleStyle(isFullscreen = true)
-        assertEquals(28, fsStyle.fontSizePx)
+        assertEquals("Arial", fsStyle.fontFamily)
+        assertEquals("Medium", fsStyle.outlineStyle)
+        assertEquals(20, fsStyle.fontSizePx)
+        assertEquals(10, fsStyle.positionPercent)
+        assertEquals(0, fsStyle.backgroundOpacityPercent)
+        assertEquals(0, fsStyle.lineSpacingPx)
+        assertEquals(0, fsStyle.backgroundPaddingPx)
     }
 
     @Test

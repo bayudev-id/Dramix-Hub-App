@@ -77,10 +77,11 @@ class ProviderPreferences(private val context: Context) {
      * If user disabled all providers, falls back to rawProviders so the feed is not empty.
      */
     fun applyToProviders(rawProviders: List<ProviderModel>): List<ProviderModel> {
+        val activeProviders = rawProviders.filter { it.isActive }
         val saved = loadConfigsFromPrefs()
-        if (saved.isEmpty()) return rawProviders
+        if (saved.isEmpty()) return activeProviders
 
-        val providerMap = rawProviders.associateBy { it.id }
+        val providerMap = activeProviders.associateBy { it.id }
         val result = mutableListOf<ProviderModel>()
         val seenIds = mutableSetOf<String>()
 
@@ -94,26 +95,27 @@ class ProviderPreferences(private val context: Context) {
             }
         }
 
-        // Add any remaining raw providers not yet stored in user preferences
-        for (prov in rawProviders) {
+        // Add any remaining active providers not yet stored in user preferences
+        for (prov in activeProviders) {
             if (prov.id !in seenIds) {
                 result.add(prov)
             }
         }
 
-        return if (result.isEmpty()) rawProviders else result
+        return if (result.isEmpty()) activeProviders else result
     }
 
     /**
      * Prepares the full list of providers with their ordering and enabled states for the UI customizer.
      */
     fun getMergedConfigItems(rawProviders: List<ProviderModel>): List<ProviderConfigItem> {
+        val activeProviders = rawProviders.filter { it.isActive }
         val saved = loadConfigsFromPrefs()
         if (saved.isEmpty()) {
-            return rawProviders.map { ProviderConfigItem(provider = it, isEnabled = true) }
+            return activeProviders.map { ProviderConfigItem(provider = it, isEnabled = true) }
         }
 
-        val providerMap = rawProviders.associateBy { it.id }
+        val providerMap = activeProviders.associateBy { it.id }
         val result = mutableListOf<ProviderConfigItem>()
         val seenIds = mutableSetOf<String>()
 
@@ -125,7 +127,7 @@ class ProviderPreferences(private val context: Context) {
             }
         }
 
-        for (prov in rawProviders) {
+        for (prov in activeProviders) {
             if (prov.id !in seenIds) {
                 result.add(ProviderConfigItem(provider = prov, isEnabled = true))
             }

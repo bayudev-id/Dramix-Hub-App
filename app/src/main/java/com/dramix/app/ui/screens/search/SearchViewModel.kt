@@ -73,11 +73,10 @@ class SearchViewModel(
     private fun loadProviders() {
         viewModelScope.launch {
             val providersResult = catalogRepository.getProviders()
-            val rawProviders = providersResult.getOrNull() ?: emptyList()
+            val rawProviders = (providersResult.getOrNull() ?: emptyList()).filter { it.isActive }
             val orderedProviders = sortProviders(rawProviders)
-            val effectiveProviders = providerPreferences?.applyToProviders(orderedProviders) ?: orderedProviders
-            val defaultProvider = effectiveProviders.firstOrNull { it.status == "active" }?.id
-                ?: effectiveProviders.firstOrNull()?.id
+            val effectiveProviders = (providerPreferences?.applyToProviders(orderedProviders) ?: orderedProviders).filter { it.isActive }
+            val defaultProvider = effectiveProviders.firstOrNull()?.id
                 ?: "wetv"
 
             _uiState.value = _uiState.value.copy(

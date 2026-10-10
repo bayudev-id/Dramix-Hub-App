@@ -84,8 +84,9 @@ class HomeViewModel(
                 return@launch
             }
 
-            rawProviders = providersResult.getOrDefault(emptyList())
-            val effectiveProviders = providerPreferences.applyToProviders(rawProviders)
+            val fetchedProviders = providersResult.getOrDefault(emptyList())
+            rawProviders = fetchedProviders.filter { it.isActive }
+            val effectiveProviders = providerPreferences.applyToProviders(rawProviders).filter { it.isActive }
             val contentTypes = buildContentTypes(effectiveProviders)
 
             // Restore last selection from preferences
@@ -129,7 +130,7 @@ class HomeViewModel(
 
     fun selectContentType(contentType: String) {
         if (_uiState.value.selectedContentType == contentType) return
-        val effectiveProviders = providerPreferences.applyToProviders(rawProviders)
+        val effectiveProviders = providerPreferences.applyToProviders(rawProviders).filter { it.isActive }
         val filtered = effectiveProviders.filter { it.contentType == contentType }
         val newSelectedProvider = filtered.firstOrNull()?.id
 
@@ -162,8 +163,9 @@ class HomeViewModel(
 
     fun selectProvider(providerId: String) {
         if (_uiState.value.selectedProviderId == providerId) return
-        val prov = _uiState.value.providers.firstOrNull { it.id == providerId }
-        val contentType = prov?.contentType ?: _uiState.value.selectedContentType
+        val prov = _uiState.value.providers.firstOrNull { it.id == providerId && it.isActive }
+        if (prov == null) return
+        val contentType = prov.contentType
 
         val filtered = if (contentType != null) {
             _uiState.value.providers.filter { it.contentType == contentType }
@@ -222,12 +224,12 @@ class HomeViewModel(
     }
 
     fun getAllProviderConfigs(): List<ProviderConfigItem> {
-        return providerPreferences.getMergedConfigItems(rawProviders)
+        return providerPreferences.getMergedConfigItems(rawProviders.filter { it.isActive })
     }
 
     fun updateProviderConfigs(configs: List<UserProviderConfig>) {
         providerPreferences.saveConfigs(configs)
-        val effectiveProviders = providerPreferences.applyToProviders(rawProviders)
+        val effectiveProviders = providerPreferences.applyToProviders(rawProviders).filter { it.isActive }
         val contentTypes = buildContentTypes(effectiveProviders)
 
         val currentType = _uiState.value.selectedContentType
@@ -267,7 +269,7 @@ class HomeViewModel(
 
     fun resetProviderConfigs() {
         providerPreferences.resetToDefault()
-        val effectiveProviders = providerPreferences.applyToProviders(rawProviders)
+        val effectiveProviders = providerPreferences.applyToProviders(rawProviders).filter { it.isActive }
         val contentTypes = buildContentTypes(effectiveProviders)
 
         val defaultProvider = effectiveProviders.firstOrNull()

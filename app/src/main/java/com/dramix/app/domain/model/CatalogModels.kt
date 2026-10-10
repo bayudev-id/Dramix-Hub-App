@@ -7,7 +7,10 @@ data class ProviderModel(
     val description: String? = null,
     val contentType: String = "long_drama",
     val status: String = "active"
-)
+) {
+    val isActive: Boolean
+        get() = status.equals("active", ignoreCase = true)
+}
 
 data class Category(
     val id: String,

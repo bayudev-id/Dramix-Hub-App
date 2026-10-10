@@ -431,3 +431,96 @@ fun toggleFullscreen() {
    val newLineSpacing = (currentStyle.lineSpacing + delta).coerceIn(0, 20)
    ```
 3. **Penyambungan Callback**: Hubungkan callback `onUpdateLineSpacing` dan `onUpdateBgPadding` di `VodPlayerOverlay.kt` dan `VodPlayerScreen.kt` dengan parameter `isFullscreen`.
+
+---
+
+## Kasus 8: Filter Provider Inaktif pada Homescreen & Layer Preferensi Klien (Database Inactive Status Whitelist)
+
+### Gejala Masalah
+Saat status salah satu provider diubah menjadi `inactive` pada database (misalnya `dramaboxbaru` yang dinonaktifkan di panel admin PocketBase):
+1. Provider tersebut masih berpotensi muncul sebagai chip di `HomeScreen` jika tersimpan di cache lokal atau dimuat dari daftar kustomisasi preferensi (`ProviderPreferences`).
+2. Jika pengguna mengklik chip provider yang inaktif, aplikasi akan menampilkan error `ERR_CAT_001` atau memuat layar kosong karena endpoint upstream menolak melayani provider yang tidak aktif.
+
+### Akar Masalah (Root Cause)
+1. **Ketiadaan Validasi Helper `isActive` di Domain Model**: `ProviderModel` hanya menyimpan field `status: String = "active"`, namun tidak menyediakan pengecekan status terstandardisasi yang aman terhadap huruf besar/kecil (`case-insensitive`) atau default fallback.
+2. **Bypass di Layer Preferensi**: Fungsi `applyToProviders()` dan `getMergedConfigItems()` di `ProviderPreferences.kt` memetakan provider yang tersimpan di SharedPreferences tanpa memvalidasi apakah provider tersebut masih berstatus aktif di database. Jika user pernah menyimpan preferensi provider sebelum dinonaktifkan, ID provider inaktif tersebut tetap masuk ke dalam list aktif.
+3. **Komponen UI Chip Mengonsumsi List Tanpa Filter**: `ProviderChipsRow` di `HomeScreen.kt` dan `SearchProviderChipsRow` di `SearchScreen.kt` langsung mengiterasi parameter `providers` tanpa memfilter `it.isActive`.
+
+### Solusi & Implementasi Multi-Layer
+
+#### 1. Tambah Helper `isActive` pada `ProviderModel` (`CatalogModels.kt`)
+```kotlin
+data class ProviderModel(
+    val id: String,
+    val name: String,
+    val iconUrl: String? = null,
+    val description: String? = null,
+    val contentType: String = "long_drama",
+    val status: String = "active"
+) {
+    val isActive: Boolean
+        get() = status.equals("active", ignoreCase = true)
+}
+```
+
+#### 2. Sanitasi Ketat di `ProviderPreferences.kt`
+Pastikan data raw selalu difilter sebelum dicocokkan dengan preferensi lokal:
+```kotlin
+fun applyToProviders(rawProviders: List<ProviderModel>): List<ProviderModel> {
+    val activeProviders = rawProviders.filter { it.isActive }
+    val saved = loadConfigsFromPrefs()
+    if (saved.isEmpty()) return activeProviders
+
+    val providerMap = activeProviders.associateBy { it.id }
+    val result = mutableListOf<ProviderModel>()
+    val seenIds = mutableSetOf<String>()
+
+    for (cfg in saved) {
+        val prov = providerMap[cfg.id]
+        if (prov != null) {
+            seenIds.add(prov.id)
+            if (cfg.isEnabled) {
+                result.add(prov)
+            }
+        }
+    }
+
+    for (prov in activeProviders) {
+        if (prov.id !in seenIds) {
+            result.add(prov)
+        }
+    }
+
+    return if (result.isEmpty()) activeProviders else result
+}
+```
+
+#### 3. Proteksi UI di `HomeScreen.kt` & `SearchScreen.kt`
+Gunakan `remember(providers)` untuk memastikan hanya provider aktif yang dirender pada chip list:
+```kotlin
+private fun ProviderChipsRow(
+    providers: List<ProviderModel>,
+    selectedProviderId: String?,
+    onProviderSelected: (String) -> Unit
+) {
+    val activeProviders = remember(providers) {
+        providers.filter { it.isActive }
+    }
+    // Render LazyRow hanya menggunakan activeProviders
+}
+```
+
+#### 4. Validasi Pemilihan di `HomeViewModel.kt`
+Cegah pemilihan provider inaktif baik melalui event klik maupun saat pergantian `contentType`:
+```kotlin
+fun selectProvider(providerId: String) {
+    if (_uiState.value.selectedProviderId == providerId) return
+    val prov = _uiState.value.providers.firstOrNull { it.id == providerId && it.isActive }
+    if (prov == null) return
+    // lanjutkan muat kategori
+}
+```
+
+### Pencegahan ke Depan
+- **Prinsip Defense in Depth**: Jangan hanya mengandalkan filter di sisi server. Selalu terapkan filter status di model domain klien dan di level komponen UI perenderan.
+- **Unit Test Komprehensif**: Sertakan skenario pengujian dengan data mock yang berisi provider `active` dan `inactive` untuk memastikan entitas inaktif tidak lolos ke state UI.

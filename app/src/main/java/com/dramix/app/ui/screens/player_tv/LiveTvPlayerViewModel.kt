@@ -78,7 +78,7 @@ class LiveTvPlayerViewModel(
 
             val effectiveProviderId = if (provId.isNullOrBlank()) {
                 val providers = catalogRepository.getProviders().getOrNull() ?: emptyList()
-                providers.firstOrNull { it.contentType == "live_tv" }?.id ?: "CineTv"
+                providers.firstOrNull { it.contentType == "live_tv" && it.isActive }?.id ?: "CineTv"
             } else {
                 provId
             }
